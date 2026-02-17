@@ -8,12 +8,26 @@ interface LoginPageProps {
   onLogin: (role: UserRole, id?: number) => void;
 }
 
+const PASSWORDS: Record<UserRole, string> = {
+  admin: 'admin@2026',
+  professeur: 'prof@2026',
+  delegue: 'delegue@2026',
+};
+
 const LoginPage = ({ onLogin }: LoginPageProps) => {
   const [selectedRole, setSelectedRole] = useState<UserRole | null>(null);
   const [profId, setProfId] = useState('');
   const [delegueId, setDelegueId] = useState('');
+  const [password, setPassword] = useState('');
+  const [error, setError] = useState('');
 
   const handleSubmit = () => {
+    if (!selectedRole) return;
+    if (password !== PASSWORDS[selectedRole]) {
+      setError('Mot de passe incorrect');
+      return;
+    }
+    setError('');
     if (selectedRole === 'admin') {
       onLogin('admin');
     } else if (selectedRole === 'professeur' && profId) {
@@ -119,11 +133,27 @@ const LoginPage = ({ onLogin }: LoginPageProps) => {
         </div>
       )}
 
+      {/* Password */}
+      {selectedRole && (
+        <div className="mt-4 w-full max-w-md animate-fade-in">
+          <label className="mb-1 block font-heading text-xs font-semibold text-foreground">Mot de passe</label>
+          <input
+            type="password"
+            value={password}
+            onChange={e => { setPassword(e.target.value); setError(''); }}
+            placeholder="Entrez votre mot de passe"
+            className="w-full rounded-lg border border-input bg-card px-4 py-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+          />
+          {error && <p className="mt-1 text-xs font-semibold text-destructive">{error}</p>}
+        </div>
+      )}
+
       {/* Submit */}
       {selectedRole && (
         <button
           onClick={handleSubmit}
           disabled={
+            !password ||
             (selectedRole === 'professeur' && !profId) ||
             (selectedRole === 'delegue' && !delegueId)
           }
