@@ -13,6 +13,10 @@ export default {
       },
     },
     extend: {
+      fontFamily: {
+        heading: ['Montserrat', 'sans-serif'],
+        body: ['Open Sans', 'sans-serif'],
+      },
       colors: {
         border: "hsl(var(--border))",
         input: "hsl(var(--input))",
@@ -57,6 +61,16 @@ export default {
           border: "hsl(var(--sidebar-border))",
           ring: "hsl(var(--sidebar-ring))",
         },
+        esgis: {
+          red: "hsl(var(--esgis-red))",
+          "red-light": "hsl(var(--esgis-red-light))",
+          gold: "hsl(var(--esgis-gold))",
+          "gold-light": "hsl(var(--esgis-gold-light))",
+          cours: "hsl(var(--esgis-cours))",
+          "cours-light": "hsl(var(--esgis-cours-light))",
+          examen: "hsl(var(--esgis-examen))",
+          "examen-light": "hsl(var(--esgis-examen-light))",
+        },
       },
       borderRadius: {
         lg: "var(--radius)",
@@ -65,25 +79,32 @@ export default {
       },
       keyframes: {
         "accordion-down": {
-          from: {
-            height: "0",
-          },
-          to: {
-            height: "var(--radix-accordion-content-height)",
-          },
+          from: { height: "0" },
+          to: { height: "var(--radix-accordion-content-height)" },
         },
         "accordion-up": {
-          from: {
-            height: "var(--radix-accordion-content-height)",
-          },
-          to: {
-            height: "0",
-          },
+          from: { height: "var(--radix-accordion-content-height)" },
+          to: { height: "0" },
+        },
+        "fade-in": {
+          from: { opacity: "0", transform: "translateY(8px)" },
+          to: { opacity: "1", transform: "translateY(0)" },
+        },
+        "slide-in": {
+          from: { opacity: "0", transform: "translateX(-12px)" },
+          to: { opacity: "1", transform: "translateX(0)" },
+        },
+        "pulse-gold": {
+          "0%, 100%": { boxShadow: "0 0 0 0 hsl(45 92% 55% / 0.4)" },
+          "50%": { boxShadow: "0 0 0 12px hsl(45 92% 55% / 0)" },
         },
       },
       animation: {
         "accordion-down": "accordion-down 0.2s ease-out",
         "accordion-up": "accordion-up 0.2s ease-out",
+        "fade-in": "fade-in 0.4s ease-out forwards",
+        "slide-in": "slide-in 0.3s ease-out forwards",
+        "pulse-gold": "pulse-gold 2s ease-in-out infinite",
       },
     },
   },
