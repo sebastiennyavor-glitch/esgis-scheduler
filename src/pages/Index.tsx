@@ -1,14 +1,31 @@
-// Update this page (the content is just a fallback if you fail to update the page)
+import { useState } from 'react';
+import { UserRole } from '@/types';
+import LoginPage from '@/components/LoginPage';
+import AdminDashboard from '@/pages/AdminDashboard';
+import ProfessorDashboard from '@/pages/ProfessorDashboard';
+import DelegateDashboard from '@/pages/DelegateDashboard';
 
 const Index = () => {
-  return (
-    <div className="flex min-h-screen items-center justify-center bg-background">
-      <div className="text-center">
-        <h1 className="mb-4 text-4xl font-bold">Welcome to Your Blank App</h1>
-        <p className="text-xl text-muted-foreground">Start building your amazing project here!</p>
-      </div>
-    </div>
-  );
+  const [auth, setAuth] = useState<{ role: UserRole; id?: number } | null>(null);
+
+  const handleLogin = (role: UserRole, id?: number) => {
+    setAuth({ role, id });
+  };
+
+  const handleLogout = () => {
+    setAuth(null);
+  };
+
+  if (!auth) return <LoginPage onLogin={handleLogin} />;
+
+  switch (auth.role) {
+    case 'admin':
+      return <AdminDashboard onLogout={handleLogout} />;
+    case 'professeur':
+      return <ProfessorDashboard profId={auth.id!} onLogout={handleLogout} />;
+    case 'delegue':
+      return <DelegateDashboard delegueId={auth.id!} onLogout={handleLogout} />;
+  }
 };
 
 export default Index;
