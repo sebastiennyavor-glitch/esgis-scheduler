@@ -1,5 +1,5 @@
-import { Seance, TypeSeance } from '@/types';
-import { cours, salles, professeurs } from '@/data/mockData';
+import { Seance } from '@/types';
+import { useData } from '@/contexts/DataContext';
 import { MapPin, Clock, User, BookOpen, FileText } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -11,6 +11,7 @@ interface SessionCardProps {
 }
 
 const SessionCard = ({ seance, showPole = false, showRole = false, profId }: SessionCardProps) => {
+  const { cours, salles, professeurs } = useData();
   const coursInfo = cours.find(c => c.id_cours === seance.id_cours);
   const salleInfo = salles.find(s => s.id_salle === seance.id_salle);
   const isCours = seance.type_seance === 'cours';
