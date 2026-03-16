@@ -28,6 +28,7 @@ export interface Delegue {
   nom: string;
   prenom: string;
   email: string;
+  telephone: string;
   id_salle: number;
 }
 

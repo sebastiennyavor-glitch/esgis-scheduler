@@ -2,7 +2,8 @@ import { useState } from 'react';
 import { useData } from '@/contexts/DataContext';
 import WeekNavigation from '@/components/WeekNavigation';
 import ScheduleGrid from '@/components/ScheduleGrid';
-import { LogOut, CalendarDays, Send, CheckCircle, Plus, BarChart3, Loader2, BookOpen, Building2, Users, Trash2 } from 'lucide-react';
+import WhatsAppModal from '@/components/WhatsAppModal';
+import { LogOut, CalendarDays, Send, CircleCheck as CheckCircle, Plus, ChartBar as BarChart3, Loader as Loader2, BookOpen, Building2, Users, Trash2, MessageCircle } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase';
 
@@ -10,7 +11,7 @@ interface AdminDashboardProps {
   onLogout: () => void;
 }
 
-type Tab = 'planning' | 'cours' | 'salles' | 'professeurs';
+type Tab = 'planning' | 'cours' | 'salles' | 'professeurs' | 'delegues';
 
 const AdminDashboard = ({ onLogout }: AdminDashboardProps) => {
   const { seances, emploiTemps, salles, cours, professeurs, loading, error, addSeance, updateEmploiStatut, refetch } = useData();
@@ -19,6 +20,7 @@ const AdminDashboard = ({ onLogout }: AdminDashboardProps) => {
   const [showForm, setShowForm] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [activeTab, setActiveTab] = useState<Tab>('planning');
+  const [whatsappModalOpen, setWhatsappModalOpen] = useState(false);
 
   // Formulaire séance
   const [formData, setFormData] = useState({
@@ -40,8 +42,12 @@ const AdminDashboard = ({ onLogout }: AdminDashboardProps) => {
   const [addingSalle, setAddingSalle] = useState(false);
 
   // Formulaire nouveau professeur
-  const [profForm, setProfForm] = useState({ nom: '', prenom: '', email: '', specialite: '' });
+  const [profForm, setProfForm] = useState({ nom: '', prenom: '', email: '', specialite: '', telephone: '' });
   const [addingProf, setAddingProf] = useState(false);
+
+  // Formulaire nouveau délégué
+  const [delegueForm, setDelegueForm] = useState({ nom: '', prenom: '', email: '', telephone: '', id_salle: '' });
+  const [addingDelegue, setAddingDelegue] = useState(false);
 
   const weekSeances = seances.filter(s => s.semaine === currentWeek);
   const planning = emploiTemps[0];
@@ -58,7 +64,8 @@ const AdminDashboard = ({ onLogout }: AdminDashboardProps) => {
     try {
       await updateEmploiStatut(planning.id_emploi, 'publié');
       setPublished(true);
-      toast.success('🚀 Planning publié !', { duration: 5000 });
+      setWhatsappModalOpen(true);
+      toast.success('Planning publié !', { duration: 5000 });
     } catch (err: any) {
       toast.error(`Erreur: ${err.message}`);
     }
@@ -170,7 +177,7 @@ const AdminDashboard = ({ onLogout }: AdminDashboardProps) => {
     try {
       const { error } = await supabase.from('professeurs').insert([profForm]);
       if (error) throw error;
-      setProfForm({ nom: '', prenom: '', email: '', specialite: '' });
+      setProfForm({ nom: '', prenom: '', email: '', specialite: '', telephone: '' });
       refetch();
       toast.success('Professeur ajouté !');
     } catch (err: any) {
@@ -180,12 +187,41 @@ const AdminDashboard = ({ onLogout }: AdminDashboardProps) => {
     }
   };
 
+  // Ajouter un délégué
+  const handleAddDelegue = async () => {
+    if (!delegueForm.nom || !delegueForm.prenom) {
+      toast.error('Nom et prénom obligatoires.');
+      return;
+    }
+    setAddingDelegue(true);
+    try {
+      const dataToInsert = { ...delegueForm, id_salle: delegueForm.id_salle ? parseInt(delegueForm.id_salle) : null };
+      const { error } = await supabase.from('delegues').insert([dataToInsert]);
+      if (error) throw error;
+      setDelegueForm({ nom: '', prenom: '', email: '', telephone: '', id_salle: '' });
+      refetch();
+      toast.success('Délégué ajouté !');
+    } catch (err: any) {
+      toast.error(`Erreur: ${err.message}`);
+    } finally {
+      setAddingDelegue(false);
+    }
+  };
+
   // Supprimer un professeur
   const handleDeleteProf = async (id: number) => {
     if (!confirm('Supprimer ce professeur ?')) return;
     const { error } = await supabase.from('professeurs').delete().eq('id_prof', id);
     if (error) toast.error(error.message);
     else { refetch(); toast.success('Professeur supprimé.'); }
+  };
+
+  // Supprimer un délégué
+  const handleDeleteDelegue = async (id: number) => {
+    if (!confirm('Supprimer ce délégué ?')) return;
+    const { error } = await supabase.from('delegues').delete().eq('id_delegue', id);
+    if (error) toast.error(error.message);
+    else { refetch(); toast.success('Délégué supprimé.'); }
   };
 
   if (loading) {
@@ -212,6 +248,7 @@ const AdminDashboard = ({ onLogout }: AdminDashboardProps) => {
     { key: 'cours', label: 'Cours', icon: BookOpen },
     { key: 'salles', label: 'Salles', icon: Building2 },
     { key: 'professeurs', label: 'Professeurs', icon: Users },
+    { key: 'delegues', label: 'Délégués', icon: Users },
   ];
 
   return (
@@ -285,6 +322,7 @@ const AdminDashboard = ({ onLogout }: AdminDashboardProps) => {
                     onClick={handlePublish}
                     disabled={published || planning.statut === 'publié'}
                     className="flex items-center gap-2 rounded-xl gradient-gold px-6 py-2 font-heading text-sm font-bold text-secondary-foreground shadow-gold transition hover:opacity-90 disabled:opacity-60 animate-pulse-gold"
+                    title="Publier et envoyer notifications"
                   >
                     {published || planning.statut === 'publié'
                       ? <><CheckCircle className="h-4 w-4" /> Publié</>
@@ -480,7 +518,7 @@ const AdminDashboard = ({ onLogout }: AdminDashboardProps) => {
               <h3 className="font-heading text-sm font-bold text-foreground flex items-center gap-2">
                 <Plus className="h-4 w-4" /> Ajouter un professeur
               </h3>
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5">
                 <div>
                   <label className="mb-1 block text-xs font-semibold text-muted-foreground">Nom *</label>
                   <input type="text" placeholder="ex: Mensah" value={profForm.nom} onChange={e => setProfForm(p => ({ ...p, nom: e.target.value }))} className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring" />
@@ -492,6 +530,10 @@ const AdminDashboard = ({ onLogout }: AdminDashboardProps) => {
                 <div>
                   <label className="mb-1 block text-xs font-semibold text-muted-foreground">Email</label>
                   <input type="email" placeholder="ex: prof@esgis.tg" value={profForm.email} onChange={e => setProfForm(p => ({ ...p, email: e.target.value }))} className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring" />
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs font-semibold text-muted-foreground">Téléphone</label>
+                  <input type="tel" placeholder="ex: +228 XX XX XX XX" value={profForm.telephone} onChange={e => setProfForm(p => ({ ...p, telephone: e.target.value }))} className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring" />
                 </div>
                 <div>
                   <label className="mb-1 block text-xs font-semibold text-muted-foreground">Spécialité</label>
@@ -509,6 +551,7 @@ const AdminDashboard = ({ onLogout }: AdminDashboardProps) => {
                   <tr>
                     <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground">Nom complet</th>
                     <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground">Email</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground">Téléphone</th>
                     <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground">Spécialité</th>
                     <th className="px-4 py-3 text-right text-xs font-semibold text-muted-foreground">Action</th>
                   </tr>
@@ -517,8 +560,9 @@ const AdminDashboard = ({ onLogout }: AdminDashboardProps) => {
                   {professeurs.map(p => (
                     <tr key={p.id_prof} className="hover:bg-muted/30">
                       <td className="px-4 py-3 font-semibold text-foreground">{p.prenom} {p.nom}</td>
-                      <td className="px-4 py-3 text-muted-foreground">{p.email || '—'}</td>
-                      <td className="px-4 py-3 text-muted-foreground">{p.specialite || '—'}</td>
+                      <td className="px-4 py-3 text-muted-foreground text-sm">{p.email || '—'}</td>
+                      <td className="px-4 py-3 text-muted-foreground text-sm font-mono">{p.telephone || '—'}</td>
+                      <td className="px-4 py-3 text-muted-foreground text-sm">{p.specialite || '—'}</td>
                       <td className="px-4 py-3 text-right">
                         <button onClick={() => handleDeleteProf(p.id_prof)} className="rounded-lg p-1.5 text-destructive hover:bg-destructive/10 transition">
                           <Trash2 className="h-4 w-4" />
@@ -531,7 +575,86 @@ const AdminDashboard = ({ onLogout }: AdminDashboardProps) => {
             </div>
           </div>
         )}
+
+        {/* ===== ONGLET DÉLÉGUÉS ===== */}
+        {activeTab === 'delegues' && (
+          <div className="space-y-6">
+            <div className="rounded-xl border border-border bg-card p-6 space-y-4">
+              <h3 className="font-heading text-sm font-bold text-foreground flex items-center gap-2">
+                <Plus className="h-4 w-4" /> Ajouter un délégué
+              </h3>
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5">
+                <div>
+                  <label className="mb-1 block text-xs font-semibold text-muted-foreground">Nom *</label>
+                  <input type="text" placeholder="ex: Mensah" value={delegueForm.nom} onChange={e => setDelegueForm(p => ({ ...p, nom: e.target.value }))} className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring" />
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs font-semibold text-muted-foreground">Prénom *</label>
+                  <input type="text" placeholder="ex: Kofi" value={delegueForm.prenom} onChange={e => setDelegueForm(p => ({ ...p, prenom: e.target.value }))} className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring" />
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs font-semibold text-muted-foreground">Email</label>
+                  <input type="email" placeholder="ex: delegue@esgis.tg" value={delegueForm.email} onChange={e => setDelegueForm(p => ({ ...p, email: e.target.value }))} className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring" />
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs font-semibold text-muted-foreground">Téléphone</label>
+                  <input type="tel" placeholder="ex: +228 XX XX XX XX" value={delegueForm.telephone} onChange={e => setDelegueForm(p => ({ ...p, telephone: e.target.value }))} className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring" />
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs font-semibold text-muted-foreground">Salle</label>
+                  <select value={delegueForm.id_salle} onChange={e => setDelegueForm(p => ({ ...p, id_salle: e.target.value }))} className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring">
+                    <option value="">Choisir…</option>
+                    {salles.map(s => <option key={s.id_salle} value={s.id_salle}>{s.nom_salle}</option>)}
+                  </select>
+                </div>
+              </div>
+              <button onClick={handleAddDelegue} disabled={addingDelegue} className="flex items-center gap-2 rounded-lg gradient-esgis px-6 py-2 font-heading text-sm font-bold text-primary-foreground disabled:opacity-60">
+                {addingDelegue ? <Loader2 className="h-4 w-4 animate-spin" /> : <><Plus className="h-4 w-4" /> Ajouter</>}
+              </button>
+            </div>
+
+            <div className="rounded-xl border border-border bg-card overflow-hidden">
+              <table className="w-full text-sm">
+                <thead className="bg-muted/50">
+                  <tr>
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground">Nom complet</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground">Email</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground">Téléphone</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground">Salle</th>
+                    <th className="px-4 py-3 text-right text-xs font-semibold text-muted-foreground">Action</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border">
+                  {delegues.map(d => {
+                    const salle = salles.find(s => s.id_salle === d.id_salle);
+                    return (
+                      <tr key={d.id_delegue} className="hover:bg-muted/30">
+                        <td className="px-4 py-3 font-semibold text-foreground">{d.prenom} {d.nom}</td>
+                        <td className="px-4 py-3 text-muted-foreground text-sm">{d.email || '—'}</td>
+                        <td className="px-4 py-3 text-muted-foreground text-sm font-mono">{d.telephone || '—'}</td>
+                        <td className="px-4 py-3 text-muted-foreground text-sm">{salle?.nom_salle || '—'}</td>
+                        <td className="px-4 py-3 text-right">
+                          <button onClick={() => handleDeleteDelegue(d.id_delegue)} className="rounded-lg p-1.5 text-destructive hover:bg-destructive/10 transition">
+                            <Trash2 className="h-4 w-4" />
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
       </main>
+
+      <WhatsAppModal
+        isOpen={whatsappModalOpen}
+        onClose={() => setWhatsappModalOpen(false)}
+        professeurs={professeurs}
+        delegues={delegues}
+        planningTitle={planning?.titre || 'Planning ESGIS'}
+      />
     </div>
   );
 };
