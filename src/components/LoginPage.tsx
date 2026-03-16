@@ -15,6 +15,7 @@ const PASSWORDS: Record<UserRole, string> = {
 };
 
 const LoginPage = ({ onLogin }: LoginPageProps) => {
+  const { professeurs, delegues, salles } = useData();
   const [selectedRole, setSelectedRole] = useState<UserRole | null>(null);
   const [profId, setProfId] = useState('');
   const [delegueId, setDelegueId] = useState('');
