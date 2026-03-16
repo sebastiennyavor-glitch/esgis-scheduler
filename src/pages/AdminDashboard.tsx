@@ -1,215 +1,536 @@
 import { useState } from 'react';
 import { useData } from '@/contexts/DataContext';
-import { 
-  LogOut, Plus, Trash2, BookOpen, Users, Home, 
-  Calendar, MapPin, User, Clock, CheckCircle 
-} from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Badge } from '@/components/ui/badge';
+import WeekNavigation from '@/components/WeekNavigation';
+import ScheduleGrid from '@/components/ScheduleGrid';
+import { LogOut, CalendarDays, Send, CheckCircle, Plus, BarChart3, Loader2, BookOpen, Building2, Users, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
+import { supabase } from '@/lib/supabase';
 
 interface AdminDashboardProps {
   onLogout: () => void;
 }
 
+type Tab = 'planning' | 'cours' | 'salles' | 'professeurs';
+
 const AdminDashboard = ({ onLogout }: AdminDashboardProps) => {
-  const { cours, professeurs, salles, seances, deleteCours, addCours } = useData();
-  const [currentWeek, setCurrentWeek] = useState(1);
-  const jours = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi'];
+  const { seances, emploiTemps, salles, cours, professeurs, loading, error, addSeance, updateEmploiStatut, refetch } = useData();
+  const [currentWeek, setCurrentWeek] = useState<1 | 2 | 3 | 4>(1);
+  const [published, setPublished] = useState(false);
+  const [showForm, setShowForm] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [activeTab, setActiveTab] = useState<Tab>('planning');
 
-  const handleDeleteCours = async (id: number) => {
-    if (window.confirm("Voulez-vous vraiment supprimer cette matière ?")) {
-      try {
-        await deleteCours(id);
-        toast.success("Matière supprimée avec succès");
-      } catch (error) {
-        toast.error("Erreur lors de la suppression");
-      }
-    }
+  // Formulaire séance
+  const [formData, setFormData] = useState({
+    id_cours: '',
+    id_salle: '',
+    type_seance: 'cours' as 'cours' | 'examen',
+    date: '',
+    heure_debut: '08:00',
+    heure_fin: '10:00',
+    profIds: [] as number[],
+  });
+
+  // Formulaire nouveau cours
+  const [coursForm, setCoursForm] = useState({ nom_cours: '', code_cours: '', description: '' });
+  const [addingCours, setAddingCours] = useState(false);
+
+  // Formulaire nouvelle salle
+  const [salleForm, setSalleForm] = useState({ nom_salle: '', capacite: '', pole: 'Adidogomé' });
+  const [addingSalle, setAddingSalle] = useState(false);
+
+  // Formulaire nouveau professeur
+  const [profForm, setProfForm] = useState({ nom: '', prenom: '', email: '', specialite: '' });
+  const [addingProf, setAddingProf] = useState(false);
+
+  const weekSeances = seances.filter(s => s.semaine === currentWeek);
+  const planning = emploiTemps[0];
+
+  const stats = {
+    total: seances.length,
+    cours: seances.filter(s => s.type_seance === 'cours').length,
+    examens: seances.filter(s => s.type_seance === 'examen').length,
+    poles: 3,
   };
 
-  const handleAddCours = async () => {
-    const nom = window.prompt("Nom de la nouvelle matière :");
-    if (!nom) return;
-    const code = window.prompt("Code de la matière (ex: INFO301) :") || "";
+  const handlePublish = async () => {
+    if (!planning) return;
     try {
-      await addCours(nom, code);
-      toast.success("Matière ajoutée !");
-    } catch (error) {
-      toast.error("Erreur lors de l'ajout");
+      await updateEmploiStatut(planning.id_emploi, 'publié');
+      setPublished(true);
+      toast.success('🚀 Planning publié !', { duration: 5000 });
+    } catch (err: any) {
+      toast.error(`Erreur: ${err.message}`);
     }
   };
+
+  const handleAddSeance = async () => {
+    if (!formData.id_cours || !formData.id_salle || !formData.date || formData.profIds.length === 0) {
+      toast.error('Veuillez remplir tous les champs obligatoires.');
+      return;
+    }
+    setSubmitting(true);
+    try {
+      await addSeance({
+        id_emploi: planning?.id_emploi || 1,
+        id_cours: parseInt(formData.id_cours),
+        id_salle: parseInt(formData.id_salle),
+        type_seance: formData.type_seance,
+        date: formData.date,
+        heure_debut: formData.heure_debut,
+        heure_fin: formData.heure_fin,
+        semaine: currentWeek,
+        professeurs: formData.profIds.map(id => ({
+          id_prof: id,
+          role: formData.type_seance === 'examen' ? 'surveillant' as const : 'enseignant' as const,
+        })),
+      });
+      setShowForm(false);
+      setFormData({ id_cours: '', id_salle: '', type_seance: 'cours', date: '', heure_debut: '08:00', heure_fin: '10:00', profIds: [] });
+      toast.success('Séance ajoutée avec succès !');
+    } catch (err: any) {
+      toast.error(`Erreur: ${err.message}`);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const toggleProf = (id: number) => {
+    setFormData(prev => ({
+      ...prev,
+      profIds: prev.profIds.includes(id)
+        ? prev.profIds.filter(p => p !== id)
+        : prev.profIds.length < 10 ? [...prev.profIds, id] : prev.profIds,
+    }));
+  };
+
+  // Ajouter un cours
+  const handleAddCours = async () => {
+    if (!coursForm.nom_cours || !coursForm.code_cours) {
+      toast.error('Nom et code du cours sont obligatoires.');
+      return;
+    }
+    setAddingCours(true);
+    try {
+      const { error } = await supabase.from('cours').insert([coursForm]);
+      if (error) throw error;
+      setCoursForm({ nom_cours: '', code_cours: '', description: '' });
+      refetch();
+      toast.success('Cours ajouté !');
+    } catch (err: any) {
+      toast.error(`Erreur: ${err.message}`);
+    } finally {
+      setAddingCours(false);
+    }
+  };
+
+  // Supprimer un cours
+  const handleDeleteCours = async (id: number) => {
+    if (!confirm('Supprimer ce cours ?')) return;
+    const { error } = await supabase.from('cours').delete().eq('id_cours', id);
+    if (error) toast.error(error.message);
+    else { refetch(); toast.success('Cours supprimé.'); }
+  };
+
+  // Ajouter une salle
+  const handleAddSalle = async () => {
+    if (!salleForm.nom_salle || !salleForm.capacite) {
+      toast.error('Nom et capacité obligatoires.');
+      return;
+    }
+    setAddingSalle(true);
+    try {
+      const { error } = await supabase.from('salles').insert([{ ...salleForm, capacite: parseInt(salleForm.capacite) }]);
+      if (error) throw error;
+      setSalleForm({ nom_salle: '', capacite: '', pole: 'Adidogomé' });
+      refetch();
+      toast.success('Salle ajoutée !');
+    } catch (err: any) {
+      toast.error(`Erreur: ${err.message}`);
+    } finally {
+      setAddingSalle(false);
+    }
+  };
+
+  // Supprimer une salle
+  const handleDeleteSalle = async (id: number) => {
+    if (!confirm('Supprimer cette salle ?')) return;
+    const { error } = await supabase.from('salles').delete().eq('id_salle', id);
+    if (error) toast.error(error.message);
+    else { refetch(); toast.success('Salle supprimée.'); }
+  };
+
+  // Ajouter un professeur
+  const handleAddProf = async () => {
+    if (!profForm.nom || !profForm.prenom) {
+      toast.error('Nom et prénom obligatoires.');
+      return;
+    }
+    setAddingProf(true);
+    try {
+      const { error } = await supabase.from('professeurs').insert([profForm]);
+      if (error) throw error;
+      setProfForm({ nom: '', prenom: '', email: '', specialite: '' });
+      refetch();
+      toast.success('Professeur ajouté !');
+    } catch (err: any) {
+      toast.error(`Erreur: ${err.message}`);
+    } finally {
+      setAddingProf(false);
+    }
+  };
+
+  // Supprimer un professeur
+  const handleDeleteProf = async (id: number) => {
+    if (!confirm('Supprimer ce professeur ?')) return;
+    const { error } = await supabase.from('professeurs').delete().eq('id_prof', id);
+    if (error) toast.error(error.message);
+    else { refetch(); toast.success('Professeur supprimé.'); }
+  };
+
+  if (loading) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-background">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-background">
+        <div className="rounded-xl border border-destructive bg-card p-6 text-center">
+          <p className="font-heading text-lg font-bold text-destructive">Erreur de connexion</p>
+          <p className="mt-2 text-sm text-muted-foreground">{error}</p>
+        </div>
+      </div>
+    );
+  }
+
+  const tabs: { key: Tab; label: string; icon: any }[] = [
+    { key: 'planning', label: 'Planning', icon: CalendarDays },
+    { key: 'cours', label: 'Cours', icon: BookOpen },
+    { key: 'salles', label: 'Salles', icon: Building2 },
+    { key: 'professeurs', label: 'Professeurs', icon: Users },
+  ];
 
   return (
-    <div className="min-h-screen bg-[#F1F5F9]">
-      {/* Header ESGIS Rouge */}
-      <header className="bg-[#C1272D] text-white px-8 py-6 flex items-center justify-between shadow-xl">
-        <div className="flex items-center gap-4">
-          <div className="bg-white p-2 rounded-lg">
-            <Calendar className="h-8 w-8 text-[#C1272D]" />
+    <div className="min-h-screen bg-background">
+      <header className="gradient-esgis shadow-esgis">
+        <div className="container mx-auto flex items-center justify-between px-4 py-4">
+          <div className="flex items-center gap-3">
+            <CalendarDays className="h-7 w-7 text-primary-foreground" />
+            <div>
+              <h1 className="font-heading text-lg font-black text-primary-foreground">ESGIS Planning</h1>
+              <p className="text-xs text-primary-foreground/80">Administration</p>
+            </div>
           </div>
-          <div>
-            <h1 className="text-2xl font-black uppercase tracking-tighter">ESGIS PLANNING</h1>
-            <p className="text-xs font-bold opacity-90 tracking-widest uppercase">Administration</p>
-          </div>
+          <button onClick={onLogout} className="flex items-center gap-2 rounded-lg bg-primary-foreground/10 px-3 py-2 text-xs font-semibold text-primary-foreground transition hover:bg-primary-foreground/20">
+            <LogOut className="h-4 w-4" /> Déconnexion
+          </button>
         </div>
-        <Button 
-          variant="ghost" 
-          onClick={onLogout} 
-          className="text-white hover:bg-white/20 font-bold border border-white/30"
-        >
-          <LogOut className="mr-2 h-4 w-4" /> Déconnexion
-        </Button>
       </header>
 
-      <main className="p-6 max-w-[1800px] mx-auto space-y-8">
-        {/* Cartes de Statistiques Blanches */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+      <main className="container mx-auto space-y-6 px-4 py-6">
+        {/* Stats */}
+        <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
           {[
-            { label: 'Total séances', val: seances.length },
-            { label: 'Cours', val: cours.length },
-            { label: 'Examens', val: seances.filter(s => s.type_seance === 'examen').length },
-            { label: 'Pôles/Salles', val: salles.length }
-          ].map((stat, i) => (
-            <Card key={i} className="border-none shadow-sm overflow-hidden bg-white">
-              <CardContent className="p-6">
-                <p className="text-xs font-bold text-slate-500 uppercase mb-2">{stat.label}</p>
-                <p className="text-4xl font-black text-slate-800">{stat.val}</p>
-              </CardContent>
-            </Card>
+            { label: 'Total séances', value: stats.total },
+            { label: 'Cours', value: stats.cours },
+            { label: 'Examens', value: stats.examens },
+            { label: 'Pôles', value: stats.poles },
+          ].map(stat => (
+            <div key={stat.label} className="rounded-xl border border-border bg-card p-4">
+              <p className="text-xs text-muted-foreground">{stat.label}</p>
+              <p className="mt-1 font-heading text-2xl font-black text-foreground">{stat.value}</p>
+            </div>
           ))}
         </div>
 
-        <Tabs defaultValue="planning" className="space-y-6">
-          <TabsList className="bg-white border shadow-sm p-1 h-14">
-            <TabsTrigger value="planning" className="px-8 font-bold data-[state=active]:bg-[#C1272D] data-[state=active]:text-white">
-              <Calendar className="mr-2 h-4 w-4" /> Planning
-            </TabsTrigger>
-            <TabsTrigger value="cours" className="px-8 font-bold data-[state=active]:bg-[#C1272D] data-[state=active]:text-white">
-              <BookOpen className="mr-2 h-4 w-4" /> Matières
-            </TabsTrigger>
-            <TabsTrigger value="profs" className="px-8 font-bold data-[state=active]:bg-[#C1272D] data-[state=active]:text-white">
-              <Users className="mr-2 h-4 w-4" /> Professeurs
-            </TabsTrigger>
-          </TabsList>
+        {/* Onglets */}
+        <div className="flex gap-1 rounded-xl border border-border bg-card p-1">
+          {tabs.map(tab => {
+            const Icon = tab.icon;
+            return (
+              <button
+                key={tab.key}
+                onClick={() => setActiveTab(tab.key)}
+                className={`flex flex-1 items-center justify-center gap-2 rounded-lg px-3 py-2 text-sm font-semibold transition ${
+                  activeTab === tab.key
+                    ? 'gradient-esgis text-primary-foreground shadow'
+                    : 'text-muted-foreground hover:bg-muted'
+                }`}
+              >
+                <Icon className="h-4 w-4" />
+                <span className="hidden sm:inline">{tab.label}</span>
+              </button>
+            );
+          })}
+        </div>
 
-          {/* SECTION PLANNING - DESIGN IDENTIQUE À L'ANCIEN */}
-          <TabsContent value="planning" className="space-y-6">
-            <div className="bg-white p-4 rounded-xl shadow-sm border flex items-center justify-between">
-              <div>
-                <h2 className="text-xl font-black text-slate-800">Planning Semestre 1 - 2025/2026</h2>
-                <p className="text-sm text-slate-500 font-medium">Gestion hebdomadaire</p>
-              </div>
-              <div className="flex bg-slate-100 p-1 rounded-lg gap-1">
-                {[1, 2, 3, 4].map(w => (
-                  <Button 
-                    key={w} 
-                    onClick={() => setCurrentWeek(w)}
-                    className={`h-10 w-12 font-bold ${currentWeek === w ? 'bg-[#C1272D] text-white' : 'bg-transparent text-slate-600 hover:bg-slate-200'}`}
-                  >
-                    S{w}
-                  </Button>
-                ))}
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-4 items-start">
-              {jours.map(jour => (
-                <div key={jour} className="space-y-4">
-                  <div className="bg-[#C1272D] text-white text-center py-3 rounded-xl font-black shadow-md uppercase tracking-wider text-sm">
-                    {jour}
-                  </div>
-                  
-                  <div className="space-y-4 min-h-[500px]">
-                    {seances.filter(s => s.jour === jour && s.semaine === currentWeek).map((s, idx) => {
-                      const matiere = cours.find(c => c.id_cours === s.id_cours);
-                      const salle = salles.find(sl => sl.id_salle === s.id_salle);
-                      const isExamen = s.type_seance === 'examen';
-
-                      return (
-                        <Card key={idx} className="border-none shadow-md hover:shadow-lg transition-all rounded-2xl overflow-hidden">
-                          <CardContent className={`p-4 ${isExamen ? 'bg-orange-50' : 'bg-blue-50'}`}>
-                            <Badge className={`mb-3 uppercase font-black text-[10px] border-none ${isExamen ? 'bg-orange-500 text-white' : 'bg-blue-600 text-white'}`}>
-                              {isExamen ? 'Examen' : 'Cours'}
-                            </Badge>
-                            
-                            <h3 className="font-black text-slate-800 leading-tight text-sm mb-3">
-                              {matiere?.nom_cours} <span className="text-slate-400 font-bold">({matiere?.code_cours})</span>
-                            </h3>
-
-                            <div className="space-y-2">
-                              <div className="flex items-center text-[11px] font-bold text-slate-600 gap-2">
-                                <Clock className="h-3 w-3 text-slate-400" /> {s.heure_debut} - {s.heure_fin}
-                              </div>
-                              <div className="flex items-center text-[11px] font-bold text-slate-600 gap-2">
-                                <MapPin className="h-3 w-3 text-slate-400" /> {salle?.nom_salle || 'Salle non définie'}
-                              </div>
-                              <div className="flex items-center text-[11px] font-bold text-slate-600 gap-2">
-                                <User className="h-3 w-3 text-slate-400" /> Professeur invité
-                              </div>
-                            </div>
-                          </CardContent>
-                        </Card>
-                      );
-                    })}
-                    {seances.filter(s => s.jour === jour && s.semaine === currentWeek).length === 0 && (
-                      <div className="border-2 border-dashed rounded-2xl p-8 text-center bg-slate-50/50">
-                        <p className="text-[10px] font-bold text-slate-400 uppercase">Aucun cours</p>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </TabsContent>
-
-          {/* SECTION MATIÈRES - AVEC AJOUT/SUPPRESSION */}
-          <TabsContent value="cours">
-            <Card className="border-none shadow-sm bg-white">
-              <CardHeader className="flex flex-row items-center justify-between border-b px-8 py-6">
+        {/* ===== ONGLET PLANNING ===== */}
+        {activeTab === 'planning' && (
+          <>
+            {planning && (
+              <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                 <div>
-                  <CardTitle className="text-xl font-black">Répertoire des Matières</CardTitle>
-                  <p className="text-sm font-medium text-slate-500">Mise à jour du semestre en cours</p>
+                  <h2 className="font-heading text-xl font-bold text-foreground">{planning.titre}</h2>
+                  <p className="text-sm text-muted-foreground">{planning.date_debut} → {planning.date_fin}</p>
                 </div>
-                <Button onClick={handleAddCours} className="bg-blue-600 hover:bg-blue-700 font-bold px-6">
-                  <Plus className="mr-2 h-4 w-4" /> Ajouter une matière
-                </Button>
-              </CardHeader>
-              <CardContent className="p-0">
-                <div className="overflow-x-auto">
-                  <table className="w-full">
-                    <thead className="bg-slate-50 border-b">
-                      <tr>
-                        <th className="px-8 py-4 text-left text-xs font-black text-slate-500 uppercase">Nom complet de la matière</th>
-                        <th className="px-8 py-4 text-left text-xs font-black text-slate-500 uppercase">Code de référence</th>
-                        <th className="px-8 py-4 text-right text-xs font-black text-slate-500 uppercase">Actions</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y">
-                      {cours.map(c => (
-                        <tr key={c.id_cours} className="hover:bg-slate-50/80 transition-colors">
-                          <td className="px-8 py-5 font-bold text-slate-700">{c.nom_cours}</td>
-                          <td className="px-8 py-5 font-mono text-sm text-blue-600 font-bold">{c.code_cours}</td>
-                          <td className="px-8 py-5 text-right">
-                            <Button 
-                              variant="ghost" 
-                              onClick={() => handleDeleteCours(c.id_cours)}
-                              className="text-red-500 hover:text-red-700 hover:bg-red-50 rounded-xl"
-                            >
-                              <Trash2 className="h-5 w-5" />
-                            </Button>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                <div className="flex gap-2">
+                  <button onClick={() => setShowForm(v => !v)} className="flex items-center gap-2 rounded-lg border border-border bg-card px-4 py-2 font-heading text-sm font-semibold text-foreground transition hover:bg-muted">
+                    <Plus className="h-4 w-4" /> Ajouter
+                  </button>
+                  <button
+                    onClick={handlePublish}
+                    disabled={published || planning.statut === 'publié'}
+                    className="flex items-center gap-2 rounded-xl gradient-gold px-6 py-2 font-heading text-sm font-bold text-secondary-foreground shadow-gold transition hover:opacity-90 disabled:opacity-60 animate-pulse-gold"
+                  >
+                    {published || planning.statut === 'publié'
+                      ? <><CheckCircle className="h-4 w-4" /> Publié</>
+                      : <><Send className="h-4 w-4" /> C'est Parti !</>}
+                  </button>
                 </div>
-              </CardContent>
-            </Card>
-          </TabsContent>
-        </Tabs>
+              </div>
+            )}
+
+            {showForm && (
+              <div className="rounded-xl border border-border bg-card p-6 space-y-4 animate-fade-in">
+                <h3 className="font-heading text-sm font-bold text-foreground">Nouvelle séance — Semaine {currentWeek}</h3>
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                  <div>
+                    <label className="mb-1 block text-xs font-semibold text-muted-foreground">Cours</label>
+                    <select value={formData.id_cours} onChange={e => setFormData(p => ({ ...p, id_cours: e.target.value }))} className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring">
+                      <option value="">Choisir…</option>
+                      {cours.map(c => <option key={c.id_cours} value={c.id_cours}>{c.code_cours} — {c.nom_cours}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-xs font-semibold text-muted-foreground">Salle</label>
+                    <select value={formData.id_salle} onChange={e => setFormData(p => ({ ...p, id_salle: e.target.value }))} className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring">
+                      <option value="">Choisir…</option>
+                      {salles.map(s => <option key={s.id_salle} value={s.id_salle}>{s.nom_salle} — {s.pole} ({s.capacite} places)</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-xs font-semibold text-muted-foreground">Type</label>
+                    <select value={formData.type_seance} onChange={e => setFormData(p => ({ ...p, type_seance: e.target.value as 'cours' | 'examen' }))} className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring">
+                      <option value="cours">Cours</option>
+                      <option value="examen">Examen</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-xs font-semibold text-muted-foreground">Date</label>
+                    <input type="date" value={formData.date} onChange={e => setFormData(p => ({ ...p, date: e.target.value }))} className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring" />
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-xs font-semibold text-muted-foreground">Début</label>
+                    <input type="time" value={formData.heure_debut} onChange={e => setFormData(p => ({ ...p, heure_debut: e.target.value }))} className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring" />
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-xs font-semibold text-muted-foreground">Fin</label>
+                    <input type="time" value={formData.heure_fin} onChange={e => setFormData(p => ({ ...p, heure_fin: e.target.value }))} className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring" />
+                  </div>
+                </div>
+                <div>
+                  <label className="mb-2 block text-xs font-semibold text-muted-foreground">Professeurs (max 10)</label>
+                  <div className="flex flex-wrap gap-2">
+                    {professeurs.map(p => (
+                      <button key={p.id_prof} onClick={() => toggleProf(p.id_prof)}
+                        className={`rounded-full px-3 py-1 text-xs font-semibold transition ${formData.profIds.includes(p.id_prof) ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground hover:bg-muted/80'}`}>
+                        {p.prenom} {p.nom}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <div className="flex gap-2">
+                  <button onClick={handleAddSeance} disabled={submitting} className="rounded-lg gradient-esgis px-6 py-2 font-heading text-sm font-bold text-primary-foreground shadow-esgis disabled:opacity-60">
+                    {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Ajouter la séance'}
+                  </button>
+                  <button onClick={() => setShowForm(false)} className="rounded-lg border border-border px-4 py-2 text-sm text-muted-foreground hover:bg-muted">
+                    Annuler
+                  </button>
+                </div>
+              </div>
+            )}
+
+            <WeekNavigation currentWeek={currentWeek} onWeekChange={setCurrentWeek} />
+            <ScheduleGrid seances={weekSeances} />
+          </>
+        )}
+
+        {/* ===== ONGLET COURS ===== */}
+        {activeTab === 'cours' && (
+          <div className="space-y-6">
+            <div className="rounded-xl border border-border bg-card p-6 space-y-4">
+              <h3 className="font-heading text-sm font-bold text-foreground flex items-center gap-2">
+                <Plus className="h-4 w-4" /> Ajouter un cours
+              </h3>
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+                <div>
+                  <label className="mb-1 block text-xs font-semibold text-muted-foreground">Nom du cours *</label>
+                  <input type="text" placeholder="ex: Algorithmique Avancée" value={coursForm.nom_cours} onChange={e => setCoursForm(p => ({ ...p, nom_cours: e.target.value }))} className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring" />
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs font-semibold text-muted-foreground">Code cours *</label>
+                  <input type="text" placeholder="ex: INFO301" value={coursForm.code_cours} onChange={e => setCoursForm(p => ({ ...p, code_cours: e.target.value }))} className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring" />
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs font-semibold text-muted-foreground">Description</label>
+                  <input type="text" placeholder="Description optionnelle" value={coursForm.description} onChange={e => setCoursForm(p => ({ ...p, description: e.target.value }))} className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring" />
+                </div>
+              </div>
+              <button onClick={handleAddCours} disabled={addingCours} className="flex items-center gap-2 rounded-lg gradient-esgis px-6 py-2 font-heading text-sm font-bold text-primary-foreground disabled:opacity-60">
+                {addingCours ? <Loader2 className="h-4 w-4 animate-spin" /> : <><Plus className="h-4 w-4" /> Ajouter</>}
+              </button>
+            </div>
+
+            <div className="rounded-xl border border-border bg-card overflow-hidden">
+              <table className="w-full text-sm">
+                <thead className="bg-muted/50">
+                  <tr>
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground">Code</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground">Nom</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground">Description</th>
+                    <th className="px-4 py-3 text-right text-xs font-semibold text-muted-foreground">Action</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border">
+                  {cours.map(c => (
+                    <tr key={c.id_cours} className="hover:bg-muted/30">
+                      <td className="px-4 py-3 font-mono text-xs text-primary">{c.code_cours}</td>
+                      <td className="px-4 py-3 font-semibold text-foreground">{c.nom_cours}</td>
+                      <td className="px-4 py-3 text-muted-foreground">{c.description || '—'}</td>
+                      <td className="px-4 py-3 text-right">
+                        <button onClick={() => handleDeleteCours(c.id_cours)} className="rounded-lg p-1.5 text-destructive hover:bg-destructive/10 transition">
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
+        {/* ===== ONGLET SALLES ===== */}
+        {activeTab === 'salles' && (
+          <div className="space-y-6">
+            <div className="rounded-xl border border-border bg-card p-6 space-y-4">
+              <h3 className="font-heading text-sm font-bold text-foreground flex items-center gap-2">
+                <Plus className="h-4 w-4" /> Ajouter une salle
+              </h3>
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+                <div>
+                  <label className="mb-1 block text-xs font-semibold text-muted-foreground">Nom de la salle *</label>
+                  <input type="text" placeholder="ex: Salle A3" value={salleForm.nom_salle} onChange={e => setSalleForm(p => ({ ...p, nom_salle: e.target.value }))} className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring" />
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs font-semibold text-muted-foreground">Capacité *</label>
+                  <input type="number" placeholder="ex: 40" value={salleForm.capacite} onChange={e => setSalleForm(p => ({ ...p, capacite: e.target.value }))} className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring" />
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs font-semibold text-muted-foreground">Pôle *</label>
+                  <select value={salleForm.pole} onChange={e => setSalleForm(p => ({ ...p, pole: e.target.value }))} className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring">
+                    <option>Adidogomé</option>
+                    <option>Avédji</option>
+                    <option>Kodjoviakopé</option>
+                  </select>
+                </div>
+              </div>
+              <button onClick={handleAddSalle} disabled={addingSalle} className="flex items-center gap-2 rounded-lg gradient-esgis px-6 py-2 font-heading text-sm font-bold text-primary-foreground disabled:opacity-60">
+                {addingSalle ? <Loader2 className="h-4 w-4 animate-spin" /> : <><Plus className="h-4 w-4" /> Ajouter</>}
+              </button>
+            </div>
+
+            <div className="rounded-xl border border-border bg-card overflow-hidden">
+              <table className="w-full text-sm">
+                <thead className="bg-muted/50">
+                  <tr>
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground">Nom</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground">Pôle</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground">Capacité</th>
+                    <th className="px-4 py-3 text-right text-xs font-semibold text-muted-foreground">Action</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border">
+                  {salles.map(s => (
+                    <tr key={s.id_salle} className="hover:bg-muted/30">
+                      <td className="px-4 py-3 font-semibold text-foreground">{s.nom_salle}</td>
+                      <td className="px-4 py-3 text-muted-foreground">{s.pole}</td>
+                      <td className="px-4 py-3 text-muted-foreground">{s.capacite} places</td>
+                      <td className="px-4 py-3 text-right">
+                        <button onClick={() => handleDeleteSalle(s.id_salle)} className="rounded-lg p-1.5 text-destructive hover:bg-destructive/10 transition">
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
+        {/* ===== ONGLET PROFESSEURS ===== */}
+        {activeTab === 'professeurs' && (
+          <div className="space-y-6">
+            <div className="rounded-xl border border-border bg-card p-6 space-y-4">
+              <h3 className="font-heading text-sm font-bold text-foreground flex items-center gap-2">
+                <Plus className="h-4 w-4" /> Ajouter un professeur
+              </h3>
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                <div>
+                  <label className="mb-1 block text-xs font-semibold text-muted-foreground">Nom *</label>
+                  <input type="text" placeholder="ex: Mensah" value={profForm.nom} onChange={e => setProfForm(p => ({ ...p, nom: e.target.value }))} className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring" />
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs font-semibold text-muted-foreground">Prénom *</label>
+                  <input type="text" placeholder="ex: Kofi" value={profForm.prenom} onChange={e => setProfForm(p => ({ ...p, prenom: e.target.value }))} className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring" />
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs font-semibold text-muted-foreground">Email</label>
+                  <input type="email" placeholder="ex: prof@esgis.tg" value={profForm.email} onChange={e => setProfForm(p => ({ ...p, email: e.target.value }))} className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring" />
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs font-semibold text-muted-foreground">Spécialité</label>
+                  <input type="text" placeholder="ex: Informatique" value={profForm.specialite} onChange={e => setProfForm(p => ({ ...p, specialite: e.target.value }))} className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring" />
+                </div>
+              </div>
+              <button onClick={handleAddProf} disabled={addingProf} className="flex items-center gap-2 rounded-lg gradient-esgis px-6 py-2 font-heading text-sm font-bold text-primary-foreground disabled:opacity-60">
+                {addingProf ? <Loader2 className="h-4 w-4 animate-spin" /> : <><Plus className="h-4 w-4" /> Ajouter</>}
+              </button>
+            </div>
+
+            <div className="rounded-xl border border-border bg-card overflow-hidden">
+              <table className="w-full text-sm">
+                <thead className="bg-muted/50">
+                  <tr>
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground">Nom complet</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground">Email</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground">Spécialité</th>
+                    <th className="px-4 py-3 text-right text-xs font-semibold text-muted-foreground">Action</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border">
+                  {professeurs.map(p => (
+                    <tr key={p.id_prof} className="hover:bg-muted/30">
+                      <td className="px-4 py-3 font-semibold text-foreground">{p.prenom} {p.nom}</td>
+                      <td className="px-4 py-3 text-muted-foreground">{p.email || '—'}</td>
+                      <td className="px-4 py-3 text-muted-foreground">{p.specialite || '—'}</td>
+                      <td className="px-4 py-3 text-right">
+                        <button onClick={() => handleDeleteProf(p.id_prof)} className="rounded-lg p-1.5 text-destructive hover:bg-destructive/10 transition">
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
       </main>
     </div>
   );
