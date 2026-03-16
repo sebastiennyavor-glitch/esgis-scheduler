@@ -12,6 +12,7 @@ interface DataContextType {
   loading: boolean;
   error: string | null;
   refresh: () => Promise<void>;
+  refetch: () => Promise<void>; // Ajout de l'alias pour le dashboard
   addSeance: (seance: Omit<Seance, 'id_seance'>) => Promise<void>;
   updateEmploiStatut: (id: number, statut: 'brouillon' | 'publié') => Promise<void>;
 }
@@ -48,7 +49,6 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
         supabase.from('seance_professeurs').select('*'),
       ]);
 
-      // Check for errors
       const results = [coursRes, profsRes, sallesRes, deleguesRes, emploiRes, seancesRes, spRes];
       const names = ['cours', 'professeurs', 'salles', 'delegues', 'emploi_temps', 'seances', 'seance_professeurs'];
       for (let i = 0; i < results.length; i++) {
@@ -63,7 +63,6 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
       setDelegues(deleguesRes.data || []);
       setEmploiTemps(emploiRes.data || []);
 
-      // Merge seance_professeurs into seances
       const spData = (spRes.data || []) as { id_seance: number; id_prof: number; role: string }[];
       const enrichedSeances: Seance[] = (seancesRes.data || []).map((s: any) => ({
         ...s,
@@ -86,7 +85,6 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
 
   const addSeance = async (seance: Omit<Seance, 'id_seance'>) => {
     const { professeurs: profs, ...seanceData } = seance;
-    
     const { data, error: insertError } = await supabase
       .from('seances')
       .insert(seanceData)
@@ -115,7 +113,20 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
   };
 
   return (
-    <DataContext.Provider value={{ cours, professeurs, salles, delegues, emploiTemps, seances, loading, error, refresh: fetchAll, addSeance, updateEmploiStatut }}>
+    <DataContext.Provider value={{ 
+      cours, 
+      professeurs, 
+      salles, 
+      delegues, 
+      emploiTemps, 
+      seances, 
+      loading, 
+      error, 
+      refresh: fetchAll, 
+      refetch: fetchAll, // On donne le même accès à refetch
+      addSeance, 
+      updateEmploiStatut 
+    }}>
       {children}
     </DataContext.Provider>
   );
