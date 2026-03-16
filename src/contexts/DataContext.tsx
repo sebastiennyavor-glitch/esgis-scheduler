@@ -14,8 +14,9 @@ interface DataContextType {
   refresh: () => Promise<void>;
   refetch: () => Promise<void>;
   addSeance: (seance: Omit<Seance, 'id_seance'>) => Promise<void>;
+  addCours: (nom: string, code: string) => Promise<void>; // AJOUTÉ
+  deleteCours: (id: number) => Promise<void>;
   updateEmploiStatut: (id: number, statut: 'brouillon' | 'publié') => Promise<void>;
-  deleteCours: (id: number) => Promise<void>; // Nouvelle fonction pour supprimer une matière
 }
 
 const DataContext = createContext<DataContextType | null>(null);
@@ -53,9 +54,7 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
       const results = [coursRes, profsRes, sallesRes, deleguesRes, emploiRes, seancesRes, spRes];
       const names = ['cours', 'professeurs', 'salles', 'delegues', 'emploi_temps', 'seances', 'seance_professeurs'];
       for (let i = 0; i < results.length; i++) {
-        if (results[i].error) {
-          throw new Error(`Erreur table ${names[i]}: ${results[i].error.message}`);
-        }
+        if (results[i].error) throw new Error(`Erreur table ${names[i]}: ${results[i].error.message}`);
       }
 
       setCours(coursRes.data || []);
@@ -74,7 +73,6 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
       setSeances(enrichedSeances);
     } catch (err: any) {
       setError(err.message);
-      console.error('Supabase fetch error:', err);
     } finally {
       setLoading(false);
     }
@@ -84,26 +82,26 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
     fetchAll();
   }, [fetchAll]);
 
+  const addCours = async (nom: string, code: string) => {
+    const { error } = await supabase.from('cours').insert([{ nom_cours: nom, code_cours: code }]);
+    if (error) throw new Error(error.message);
+    await fetchAll();
+  };
+
+  const deleteCours = async (id: number) => {
+    const { error } = await supabase.from('cours').delete().eq('id_cours', id);
+    if (error) throw new Error(error.message);
+    await fetchAll();
+  };
+
   const addSeance = async (seance: Omit<Seance, 'id_seance'>) => {
     const { professeurs: profs, ...seanceData } = seance;
-    const { data, error: insertError } = await supabase
-      .from('seances')
-      .insert(seanceData)
-      .select()
-      .single();
-
+    const { data, error: insertError } = await supabase.from('seances').insert(seanceData).select().single();
     if (insertError) throw new Error(insertError.message);
-
     if (profs.length > 0) {
-      const spRows = profs.map(p => ({
-        id_seance: data.id_seance,
-        id_prof: p.id_prof,
-        role: p.role,
-      }));
-      const { error: spError } = await supabase.from('seance_professeurs').insert(spRows);
-      if (spError) throw new Error(spError.message);
+      const spRows = profs.map(p => ({ id_seance: data.id_seance, id_prof: p.id_prof, role: p.role }));
+      await supabase.from('seance_professeurs').insert(spRows);
     }
-
     await fetchAll();
   };
 
@@ -113,28 +111,10 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
     await fetchAll();
   };
 
-  // Logique de suppression d'un cours
-  const deleteCours = async (id: number) => {
-    const { error } = await supabase.from('cours').delete().eq('id_cours', id);
-    if (error) throw new Error(error.message);
-    await fetchAll();
-  };
-
   return (
     <DataContext.Provider value={{ 
-      cours, 
-      professeurs, 
-      salles, 
-      delegues, 
-      emploiTemps, 
-      seances, 
-      loading, 
-      error, 
-      refresh: fetchAll, 
-      refetch: fetchAll, 
-      addSeance, 
-      updateEmploiStatut,
-      deleteCours
+      cours, professeurs, salles, delegues, emploiTemps, seances, loading, error, 
+      refresh: fetchAll, refetch: fetchAll, addSeance, addCours, deleteCours, updateEmploiStatut 
     }}>
       {children}
     </DataContext.Provider>
