@@ -12,9 +12,10 @@ interface DataContextType {
   loading: boolean;
   error: string | null;
   refresh: () => Promise<void>;
-  refetch: () => Promise<void>; // Ajout de l'alias pour le dashboard
+  refetch: () => Promise<void>;
   addSeance: (seance: Omit<Seance, 'id_seance'>) => Promise<void>;
   updateEmploiStatut: (id: number, statut: 'brouillon' | 'publié') => Promise<void>;
+  deleteCours: (id: number) => Promise<void>; // Nouvelle fonction pour supprimer une matière
 }
 
 const DataContext = createContext<DataContextType | null>(null);
@@ -112,6 +113,13 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
     await fetchAll();
   };
 
+  // Logique de suppression d'un cours
+  const deleteCours = async (id: number) => {
+    const { error } = await supabase.from('cours').delete().eq('id_cours', id);
+    if (error) throw new Error(error.message);
+    await fetchAll();
+  };
+
   return (
     <DataContext.Provider value={{ 
       cours, 
@@ -123,9 +131,10 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
       loading, 
       error, 
       refresh: fetchAll, 
-      refetch: fetchAll, // On donne le même accès à refetch
+      refetch: fetchAll, 
       addSeance, 
-      updateEmploiStatut 
+      updateEmploiStatut,
+      deleteCours
     }}>
       {children}
     </DataContext.Provider>
