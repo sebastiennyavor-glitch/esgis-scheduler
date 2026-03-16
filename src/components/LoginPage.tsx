@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { UserRole } from '@/types';
-import { professeurs, delegues, salles } from '@/data/mockData';
+import { useData } from '@/contexts/DataContext';
 import { Shield, GraduationCap, Users, ArrowRight } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -15,6 +15,7 @@ const PASSWORDS: Record<UserRole, string> = {
 };
 
 const LoginPage = ({ onLogin }: LoginPageProps) => {
+  const { professeurs, delegues, salles } = useData();
   const [selectedRole, setSelectedRole] = useState<UserRole | null>(null);
   const [profId, setProfId] = useState('');
   const [delegueId, setDelegueId] = useState('');
