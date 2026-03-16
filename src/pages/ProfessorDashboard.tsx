@@ -1,8 +1,8 @@
 import { useState } from 'react';
-import { seances, professeurs } from '@/data/mockData';
+import { useData } from '@/contexts/DataContext';
 import WeekNavigation from '@/components/WeekNavigation';
 import ScheduleGrid from '@/components/ScheduleGrid';
-import { LogOut, CalendarDays, User } from 'lucide-react';
+import { LogOut, CalendarDays, User, Loader2 } from 'lucide-react';
 
 interface ProfessorDashboardProps {
   profId: number;
@@ -10,12 +10,21 @@ interface ProfessorDashboardProps {
 }
 
 const ProfessorDashboard = ({ profId, onLogout }: ProfessorDashboardProps) => {
+  const { seances, professeurs, loading } = useData();
   const [currentWeek, setCurrentWeek] = useState<1 | 2 | 3 | 4>(1);
   const prof = professeurs.find(p => p.id_prof === profId);
 
   const profSeances = seances.filter(
     s => s.semaine === currentWeek && s.professeurs.some(sp => sp.id_prof === profId)
   );
+
+  if (loading) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-background">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-background">
@@ -35,7 +44,6 @@ const ProfessorDashboard = ({ profId, onLogout }: ProfessorDashboardProps) => {
       </header>
 
       <main className="container mx-auto space-y-6 px-4 py-6">
-        {/* Prof info */}
         <div className="flex items-center gap-4 rounded-xl border border-border bg-card p-4">
           <div className="flex h-14 w-14 items-center justify-center rounded-xl gradient-esgis">
             <User className="h-7 w-7 text-primary-foreground" />
