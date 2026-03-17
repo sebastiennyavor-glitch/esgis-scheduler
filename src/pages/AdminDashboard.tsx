@@ -14,7 +14,7 @@ interface AdminDashboardProps {
 type Tab = 'planning' | 'cours' | 'salles' | 'professeurs' | 'delegues';
 
 const AdminDashboard = ({ onLogout }: AdminDashboardProps) => {
-  const { seances, emploiTemps, salles, cours, professeurs, loading, error, addSeance, updateEmploiStatut, refetch } = useData();
+  const { seances, emploiTemps, salles, cours, professeurs, delegues, loading, error, addSeance, updateEmploiStatut, refetch } = useData();
   const [currentWeek, setCurrentWeek] = useState<1 | 2 | 3 | 4>(1);
   const [published, setPublished] = useState(false);
   const [showForm, setShowForm] = useState(false);

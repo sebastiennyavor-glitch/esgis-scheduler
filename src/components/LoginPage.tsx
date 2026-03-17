@@ -143,7 +143,7 @@ const LoginPage = ({ onLogin }: LoginPageProps) => {
             value={password}
             onChange={e => { setPassword(e.target.value); setError(''); }}
             placeholder="Entrez votre mot de passe"
-            className="w-full rounded-lg border border-input bg-card px-4 py-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+            className="w-full rounded-lg border border-input bg-card px-4 py-3 text-sm text-card-foreground focus:outline-none focus:ring-2 focus:ring-ring"
           />
           {error && <p className="mt-1 text-xs font-semibold text-destructive">{error}</p>}
         </div>
