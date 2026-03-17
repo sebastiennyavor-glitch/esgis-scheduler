@@ -51,9 +51,17 @@ const WhatsAppModal = ({ isOpen, onClose, professeurs, delegues, planningTitle }
 
   const recipients = getRecipients();
 
-  const sendWhatsApp = (phone: string) => {
-    const encodedMessage = encodeURIComponent(message);
-    const whatsappUrl = `https://wa.me/${phone.replace(/\D/g, '')}?text=${encodedMessage}`;
+  const getPersonalizedMessage = (recipient: { name: string; type: 'professeur' | 'delegue' }) => {
+    if (recipient.type === 'professeur') {
+      return `Bonjour ${recipient.name}, le planning ${planningTitle} a été publié. Consultez vos séances ici : https://esgis-program.vercel.app — Votre mot de passe : prof@2026`;
+    }
+    return `Bonjour ${recipient.name}, le planning ${planningTitle} a été publié. Consultez le planning de votre salle ici : https://esgis-program.vercel.app — Votre mot de passe : delegue@2026`;
+  };
+
+  const sendWhatsApp = (recipient: { name: string; phone: string; type: 'professeur' | 'delegue' }) => {
+    const personalizedMsg = useCustomMessage ? message : getPersonalizedMessage(recipient);
+    const encodedMessage = encodeURIComponent(personalizedMsg);
+    const whatsappUrl = `https://wa.me/${recipient.phone.replace(/\D/g, '')}?text=${encodedMessage}`;
     window.open(whatsappUrl, '_blank');
   };
 
