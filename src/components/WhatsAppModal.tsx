@@ -14,7 +14,6 @@ type RecipientType = 'professeurs' | 'delegues' | 'tous';
 
 const WhatsAppModal = ({ isOpen, onClose, professeurs, delegues, planningTitle }: WhatsAppModalProps) => {
   const [recipientType, setRecipientType] = useState<RecipientType>('tous');
-  const [message, setMessage] = useState(`Bonjour, le planning "${planningTitle}" a été publié. Veuillez consulter les détails sur la plateforme.`);
 
   const getRecipients = () => {
     const profsWithPhone = professeurs.filter(p => p.telephone?.trim());
@@ -59,8 +58,7 @@ const WhatsAppModal = ({ isOpen, onClose, professeurs, delegues, planningTitle }
   };
 
   const sendWhatsApp = (recipient: { name: string; phone: string; type: 'professeur' | 'delegue' }) => {
-    const personalizedMsg = useCustomMessage ? message : getPersonalizedMessage(recipient);
-    const encodedMessage = encodeURIComponent(personalizedMsg);
+    const encodedMessage = encodeURIComponent(getPersonalizedMessage(recipient));
     const whatsappUrl = `https://wa.me/${recipient.phone.replace(/\D/g, '')}?text=${encodedMessage}`;
     window.open(whatsappUrl, '_blank');
   };
@@ -99,15 +97,11 @@ const WhatsAppModal = ({ isOpen, onClose, professeurs, delegues, planningTitle }
             ))}
           </div>
 
-          <div>
-            <label className="block text-sm font-semibold text-muted-foreground mb-2">Message</label>
-            <textarea
-              value={message}
-              onChange={e => setMessage(e.target.value)}
-              rows={4}
-              className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
-              placeholder="Votre message..."
-            />
+          <div className="rounded-lg border border-border bg-muted/30 p-4">
+            <p className="text-xs font-semibold text-muted-foreground mb-2">Aperçu du message :</p>
+            <p className="text-sm text-foreground italic">
+              « Bonjour [Prénom Nom], le planning {planningTitle} a été publié. Consultez ... ici : https://esgis-program.vercel.app — Votre mot de passe : [selon le rôle] »
+            </p>
           </div>
 
           {recipients.length === 0 ? (
@@ -126,10 +120,15 @@ const WhatsAppModal = ({ isOpen, onClose, professeurs, delegues, planningTitle }
                   <div key={idx} className="px-4 py-3 flex items-center justify-between hover:bg-muted/30 transition">
                     <div>
                       <p className="font-semibold text-sm text-foreground">{recipient.name}</p>
-                      <p className="text-xs text-muted-foreground font-mono">{recipient.phone}</p>
+                      <div className="flex items-center gap-2">
+                        <p className="text-xs text-muted-foreground font-mono">{recipient.phone}</p>
+                        <span className={`text-xs px-1.5 py-0.5 rounded ${recipient.type === 'professeur' ? 'bg-primary/10 text-primary' : 'bg-accent text-accent-foreground'}`}>
+                          {recipient.type === 'professeur' ? 'Prof' : 'Délégué'}
+                        </span>
+                      </div>
                     </div>
                     <button
-                      onClick={() => sendWhatsApp(recipient.phone)}
+                      onClick={() => sendWhatsApp(recipient)}
                       className="rounded-lg bg-green-600 hover:bg-green-700 p-2 text-white transition"
                       title="Envoyer via WhatsApp"
                     >
@@ -150,7 +149,7 @@ const WhatsAppModal = ({ isOpen, onClose, professeurs, delegues, planningTitle }
             </button>
             <button
               onClick={() => {
-                recipients.forEach(r => sendWhatsApp(r.phone));
+                recipients.forEach(r => sendWhatsApp(r));
                 onClose();
               }}
               disabled={recipients.length === 0}
