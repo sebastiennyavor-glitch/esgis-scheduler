@@ -319,6 +319,13 @@ const AdminDashboard = ({ onLogout }: AdminDashboardProps) => {
                     <Plus className="h-4 w-4" /> Ajouter
                   </button>
                   <button
+                    onClick={() => setWhatsappModalOpen(true)}
+                    className="flex items-center gap-2 rounded-lg bg-green-600 px-4 py-2 font-heading text-sm font-bold text-white transition hover:bg-green-700"
+                    title="Envoyer via WhatsApp"
+                  >
+                    <MessageCircle className="h-4 w-4" /> WhatsApp
+                  </button>
+                  <button
                     onClick={handlePublish}
                     disabled={published || planning.statut === 'publié'}
                     className="flex items-center gap-2 rounded-xl gradient-gold px-6 py-2 font-heading text-sm font-bold text-secondary-foreground shadow-gold transition hover:opacity-90 disabled:opacity-60 animate-pulse-gold"
