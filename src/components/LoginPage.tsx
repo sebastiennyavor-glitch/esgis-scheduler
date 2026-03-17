@@ -103,7 +103,7 @@ const LoginPage = ({ onLogin }: LoginPageProps) => {
           <select
             value={profId}
             onChange={e => setProfId(e.target.value)}
-            className="w-full rounded-lg border border-input bg-card px-4 py-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+            className="w-full rounded-lg border border-input bg-card px-4 py-3 text-sm text-card-foreground focus:outline-none focus:ring-2 focus:ring-ring"
           >
             <option value="">— Choisir un professeur —</option>
             {professeurs.map(p => (
@@ -119,7 +119,7 @@ const LoginPage = ({ onLogin }: LoginPageProps) => {
           <select
             value={delegueId}
             onChange={e => setDelegueId(e.target.value)}
-            className="w-full rounded-lg border border-input bg-card px-4 py-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+            className="w-full rounded-lg border border-input bg-card px-4 py-3 text-sm text-card-foreground focus:outline-none focus:ring-2 focus:ring-ring"
           >
             <option value="">— Choisir un délégué —</option>
             {delegues.map(d => {
@@ -143,7 +143,7 @@ const LoginPage = ({ onLogin }: LoginPageProps) => {
             value={password}
             onChange={e => { setPassword(e.target.value); setError(''); }}
             placeholder="Entrez votre mot de passe"
-            className="w-full rounded-lg border border-input bg-card px-4 py-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+            className="w-full rounded-lg border border-input bg-card px-4 py-3 text-sm text-card-foreground focus:outline-none focus:ring-2 focus:ring-ring"
           />
           {error && <p className="mt-1 text-xs font-semibold text-destructive">{error}</p>}
         </div>
