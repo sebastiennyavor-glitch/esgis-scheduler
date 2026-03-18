@@ -1,6 +1,6 @@
 import { Seance } from '@/types';
 import { useData } from '@/contexts/DataContext';
-import { MapPin, Clock, User, BookOpen, FileText } from 'lucide-react';
+import { MapPin, Clock, User, BookOpen, FileText, CheckCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface SessionCardProps {
@@ -11,7 +11,7 @@ interface SessionCardProps {
 }
 
 const SessionCard = ({ seance, showPole = false, showRole = false, profId }: SessionCardProps) => {
-  const { cours, salles, professeurs } = useData();
+  const { cours, salles, professeurs, seances } = useData();
   const coursInfo = cours.find(c => c.id_cours === seance.id_cours);
   const salleInfo = salles.find(s => s.id_salle === seance.id_salle);
   const isCours = seance.type_seance === 'cours';
@@ -22,6 +22,18 @@ const SessionCard = ({ seance, showPole = false, showRole = false, profId }: Ses
     return { ...sp, prof };
   });
 
+  // Calculate hours done for this cours
+  const heuresTotal = coursInfo?.heures_total || 0;
+  const allSeancesForCours = seances.filter(s => s.id_cours === seance.id_cours);
+  const heuresEffectuees = allSeancesForCours.reduce((sum, s) => {
+    const [hd, md] = s.heure_debut.split(':').map(Number);
+    const [hf, mf] = s.heure_fin.split(':').map(Number);
+    return sum + (hf + mf / 60) - (hd + md / 60);
+  }, 0);
+  const heuresEffRounded = Math.round(heuresEffectuees * 10) / 10;
+  const isTermine = heuresTotal > 0 && heuresEffRounded >= heuresTotal;
+  const progressPct = heuresTotal > 0 ? Math.min(100, (heuresEffRounded / heuresTotal) * 100) : 0;
+
   return (
     <div className={cn(
       'rounded-lg p-4 transition-all duration-200 hover:shadow-md animate-fade-in',
@@ -29,7 +41,7 @@ const SessionCard = ({ seance, showPole = false, showRole = false, profId }: Ses
     )}>
       <div className="flex items-start justify-between gap-2">
         <div className="flex-1 space-y-2">
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
             {isCours ? (
               <BookOpen className="h-4 w-4 text-esgis-cours" />
             ) : (
@@ -49,12 +61,35 @@ const SessionCard = ({ seance, showPole = false, showRole = false, profId }: Ses
                 {profRole === 'enseignant' ? 'Enseignant' : 'Surveillant'}
               </span>
             )}
+            {isTermine && (
+              <span className="flex items-center gap-1 rounded-full bg-green-500 px-2 py-0.5 text-xs font-bold text-primary-foreground">
+                <CheckCircle className="h-3 w-3" /> Terminé
+              </span>
+            )}
           </div>
 
           <h4 className="font-heading text-sm font-bold text-foreground">
             {coursInfo?.nom_cours}
             <span className="ml-2 text-xs font-normal text-muted-foreground">({coursInfo?.code_cours})</span>
           </h4>
+
+          {heuresTotal > 0 && (
+            <div className="space-y-1">
+              <div className="flex items-center justify-between text-xs text-muted-foreground">
+                <span>{heuresEffRounded}h / {heuresTotal}h</span>
+                <span>{Math.round(progressPct)}%</span>
+              </div>
+              <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted">
+                <div
+                  className={cn(
+                    'h-full rounded-full transition-all',
+                    isTermine ? 'bg-green-500' : 'bg-primary'
+                  )}
+                  style={{ width: `${progressPct}%` }}
+                />
+              </div>
+            </div>
+          )}
 
           <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
             <span className="flex items-center gap-1">

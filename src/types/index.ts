@@ -5,6 +5,7 @@ export interface Cours {
   nom_cours: string;
   code_cours: string;
   description: string;
+  heures_total: number | null;
 }
 
 export interface Professeur {
@@ -30,6 +31,7 @@ export interface Delegue {
   email: string;
   telephone: string;
   id_salle: number;
+  niveau: string | null;
 }
 
 export interface EmploiTemps {
@@ -59,6 +61,13 @@ export interface Seance {
   heure_fin: string;
   semaine: 1 | 2 | 3 | 4;
   professeurs: SeanceProfesseur[];
+}
+
+export interface ConfigPlanning {
+  id?: number;
+  date_semaine: string;
+  nb_colonnes: number;
+  nb_lignes: number;
 }
 
 export type UserRole = 'admin' | 'professeur' | 'delegue';
