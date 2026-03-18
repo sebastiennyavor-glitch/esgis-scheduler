@@ -1,6 +1,6 @@
 import { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react';
 import { supabase } from '@/lib/supabase';
-import { Cours, Professeur, Salle, Delegue, EmploiTemps, Seance, SeanceProfesseur } from '@/types';
+import { Cours, Professeur, Salle, Delegue, EmploiTemps, Seance, SeanceProfesseur, ConfigPlanning } from '@/types';
 
 interface DataContextType {
   cours: Cours[];
@@ -9,14 +9,16 @@ interface DataContextType {
   delegues: Delegue[];
   emploiTemps: EmploiTemps[];
   seances: Seance[];
+  configPlanning: ConfigPlanning | null;
   loading: boolean;
   error: string | null;
   refresh: () => Promise<void>;
   refetch: () => Promise<void>;
   addSeance: (seance: Omit<Seance, 'id_seance'>) => Promise<void>;
-  addCours: (nom: string, code: string) => Promise<void>; // AJOUTÉ
+  addCours: (nom: string, code: string) => Promise<void>;
   deleteCours: (id: number) => Promise<void>;
   updateEmploiStatut: (id: number, statut: 'brouillon' | 'publié') => Promise<void>;
+  saveConfigPlanning: (config: ConfigPlanning) => Promise<void>;
 }
 
 const DataContext = createContext<DataContextType | null>(null);
@@ -34,6 +36,7 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
   const [delegues, setDelegues] = useState<Delegue[]>([]);
   const [emploiTemps, setEmploiTemps] = useState<EmploiTemps[]>([]);
   const [seances, setSeances] = useState<Seance[]>([]);
+  const [configPlanning, setConfigPlanning] = useState<ConfigPlanning | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -41,7 +44,7 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
     setLoading(true);
     setError(null);
     try {
-      const [coursRes, profsRes, sallesRes, deleguesRes, emploiRes, seancesRes, spRes] = await Promise.all([
+      const [coursRes, profsRes, sallesRes, deleguesRes, emploiRes, seancesRes, spRes, configRes] = await Promise.all([
         supabase.from('cours').select('*'),
         supabase.from('professeurs').select('*'),
         supabase.from('salles').select('*'),
@@ -49,6 +52,7 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
         supabase.from('emploi_temps').select('*'),
         supabase.from('seances').select('*'),
         supabase.from('seance_professeurs').select('*'),
+        supabase.from('config_planning').select('*').limit(1).maybeSingle(),
       ]);
 
       const results = [coursRes, profsRes, sallesRes, deleguesRes, emploiRes, seancesRes, spRes];
@@ -62,6 +66,7 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
       setSalles(sallesRes.data || []);
       setDelegues(deleguesRes.data || []);
       setEmploiTemps(emploiRes.data || []);
+      setConfigPlanning(configRes.data || null);
 
       const spData = (spRes.data || []) as { id_seance: number; id_prof: number; role: string }[];
       const enrichedSeances: Seance[] = (seancesRes.data || []).map((s: any) => ({
@@ -111,10 +116,29 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
     await fetchAll();
   };
 
+  const saveConfigPlanning = async (config: ConfigPlanning) => {
+    if (configPlanning?.id) {
+      const { error } = await supabase.from('config_planning').update({
+        date_semaine: config.date_semaine,
+        nb_colonnes: config.nb_colonnes,
+        nb_lignes: config.nb_lignes,
+      }).eq('id', configPlanning.id);
+      if (error) throw new Error(error.message);
+    } else {
+      const { error } = await supabase.from('config_planning').insert([{
+        date_semaine: config.date_semaine,
+        nb_colonnes: config.nb_colonnes,
+        nb_lignes: config.nb_lignes,
+      }]);
+      if (error) throw new Error(error.message);
+    }
+    await fetchAll();
+  };
+
   return (
     <DataContext.Provider value={{ 
-      cours, professeurs, salles, delegues, emploiTemps, seances, loading, error, 
-      refresh: fetchAll, refetch: fetchAll, addSeance, addCours, deleteCours, updateEmploiStatut 
+      cours, professeurs, salles, delegues, emploiTemps, seances, configPlanning, loading, error, 
+      refresh: fetchAll, refetch: fetchAll, addSeance, addCours, deleteCours, updateEmploiStatut, saveConfigPlanning
     }}>
       {children}
     </DataContext.Provider>
