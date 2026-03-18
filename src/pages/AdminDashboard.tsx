@@ -3,24 +3,26 @@ import { useData } from '@/contexts/DataContext';
 import WeekNavigation from '@/components/WeekNavigation';
 import ScheduleGrid from '@/components/ScheduleGrid';
 import WhatsAppModal from '@/components/WhatsAppModal';
-import { LogOut, CalendarDays, Send, CircleCheck as CheckCircle, Plus, ChartBar as BarChart3, Loader as Loader2, BookOpen, Building2, Users, Trash2, MessageCircle } from 'lucide-react';
+import { LogOut, CalendarDays, Send, CircleCheck as CheckCircle, Plus, ChartBar as BarChart3, Loader as Loader2, BookOpen, Building2, Users, Trash2, MessageCircle, Clock, MapPin, Settings, FileText } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase';
+import { cn } from '@/lib/utils';
 
 interface AdminDashboardProps {
   onLogout: () => void;
 }
 
-type Tab = 'planning' | 'cours' | 'salles' | 'professeurs' | 'delegues';
+type Tab = 'planning' | 'cours' | 'salles' | 'professeurs' | 'delegues' | 'aujourdhui';
 
 const AdminDashboard = ({ onLogout }: AdminDashboardProps) => {
-  const { seances, emploiTemps, salles, cours, professeurs, delegues, loading, error, addSeance, updateEmploiStatut, refetch } = useData();
+  const { seances, emploiTemps, salles, cours, professeurs, delegues, configPlanning, loading, error, addSeance, updateEmploiStatut, refetch, saveConfigPlanning } = useData();
   const [currentWeek, setCurrentWeek] = useState<1 | 2 | 3 | 4>(1);
   const [published, setPublished] = useState(false);
   const [showForm, setShowForm] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [activeTab, setActiveTab] = useState<Tab>('planning');
   const [whatsappModalOpen, setWhatsappModalOpen] = useState(false);
+  const [showConfigForm, setShowConfigForm] = useState(false);
 
   // Formulaire séance
   const [formData, setFormData] = useState({
@@ -34,7 +36,7 @@ const AdminDashboard = ({ onLogout }: AdminDashboardProps) => {
   });
 
   // Formulaire nouveau cours
-  const [coursForm, setCoursForm] = useState({ nom_cours: '', code_cours: '', description: '' });
+  const [coursForm, setCoursForm] = useState({ nom_cours: '', code_cours: '', description: '', heures_total: '' });
   const [addingCours, setAddingCours] = useState(false);
 
   // Formulaire nouvelle salle
@@ -46,17 +48,42 @@ const AdminDashboard = ({ onLogout }: AdminDashboardProps) => {
   const [addingProf, setAddingProf] = useState(false);
 
   // Formulaire nouveau délégué
-  const [delegueForm, setDelegueForm] = useState({ nom: '', prenom: '', email: '', telephone: '', id_salle: '' });
+  const [delegueForm, setDelegueForm] = useState({ nom: '', prenom: '', email: '', telephone: '', id_salle: '', niveau: '' });
   const [addingDelegue, setAddingDelegue] = useState(false);
+
+  // Config planning form
+  const [configForm, setConfigForm] = useState({
+    date_semaine: configPlanning?.date_semaine || '',
+    nb_colonnes: configPlanning?.nb_colonnes?.toString() || '1',
+    nb_lignes: configPlanning?.nb_lignes?.toString() || '6',
+  });
+  const [savingConfig, setSavingConfig] = useState(false);
 
   const weekSeances = seances.filter(s => s.semaine === currentWeek);
   const planning = emploiTemps[0];
+
+  // Today's sessions
+  const today = new Date().toISOString().split('T')[0];
+  const todaySeances = seances.filter(s => s.date === today).sort((a, b) => a.heure_debut.localeCompare(b.heure_debut));
 
   const stats = {
     total: seances.length,
     cours: seances.filter(s => s.type_seance === 'cours').length,
     examens: seances.filter(s => s.type_seance === 'examen').length,
     poles: 3,
+  };
+
+  // Calculate hours per cours
+  const getCoursProgress = (id_cours: number) => {
+    const coursInfo = cours.find(c => c.id_cours === id_cours);
+    const total = coursInfo?.heures_total || 0;
+    const coursSeances = seances.filter(s => s.id_cours === id_cours);
+    const done = coursSeances.reduce((sum, s) => {
+      const [hd, md] = s.heure_debut.split(':').map(Number);
+      const [hf, mf] = s.heure_fin.split(':').map(Number);
+      return sum + (hf + mf / 60) - (hd + md / 60);
+    }, 0);
+    return { done: Math.round(done * 10) / 10, total };
   };
 
   const handlePublish = async () => {
@@ -111,7 +138,6 @@ const AdminDashboard = ({ onLogout }: AdminDashboardProps) => {
     }));
   };
 
-  // Ajouter un cours
   const handleAddCours = async () => {
     if (!coursForm.nom_cours || !coursForm.code_cours) {
       toast.error('Nom et code du cours sont obligatoires.');
@@ -119,9 +145,12 @@ const AdminDashboard = ({ onLogout }: AdminDashboardProps) => {
     }
     setAddingCours(true);
     try {
-      const { error } = await supabase.from('cours').insert([coursForm]);
+      const { error } = await supabase.from('cours').insert([{
+        ...coursForm,
+        heures_total: coursForm.heures_total ? parseInt(coursForm.heures_total) : null,
+      }]);
       if (error) throw error;
-      setCoursForm({ nom_cours: '', code_cours: '', description: '' });
+      setCoursForm({ nom_cours: '', code_cours: '', description: '', heures_total: '' });
       refetch();
       toast.success('Cours ajouté !');
     } catch (err: any) {
@@ -131,7 +160,6 @@ const AdminDashboard = ({ onLogout }: AdminDashboardProps) => {
     }
   };
 
-  // Supprimer un cours
   const handleDeleteCours = async (id: number) => {
     if (!confirm('Supprimer ce cours ?')) return;
     const { error } = await supabase.from('cours').delete().eq('id_cours', id);
@@ -139,7 +167,6 @@ const AdminDashboard = ({ onLogout }: AdminDashboardProps) => {
     else { refetch(); toast.success('Cours supprimé.'); }
   };
 
-  // Ajouter une salle
   const handleAddSalle = async () => {
     if (!salleForm.nom_salle || !salleForm.capacite) {
       toast.error('Nom et capacité obligatoires.');
@@ -159,7 +186,6 @@ const AdminDashboard = ({ onLogout }: AdminDashboardProps) => {
     }
   };
 
-  // Supprimer une salle
   const handleDeleteSalle = async (id: number) => {
     if (!confirm('Supprimer cette salle ?')) return;
     const { error } = await supabase.from('salles').delete().eq('id_salle', id);
@@ -167,7 +193,6 @@ const AdminDashboard = ({ onLogout }: AdminDashboardProps) => {
     else { refetch(); toast.success('Salle supprimée.'); }
   };
 
-  // Ajouter un professeur
   const handleAddProf = async () => {
     if (!profForm.nom || !profForm.prenom) {
       toast.error('Nom et prénom obligatoires.');
@@ -187,7 +212,6 @@ const AdminDashboard = ({ onLogout }: AdminDashboardProps) => {
     }
   };
 
-  // Ajouter un délégué
   const handleAddDelegue = async () => {
     if (!delegueForm.nom || !delegueForm.prenom) {
       toast.error('Nom et prénom obligatoires.');
@@ -195,10 +219,14 @@ const AdminDashboard = ({ onLogout }: AdminDashboardProps) => {
     }
     setAddingDelegue(true);
     try {
-      const dataToInsert = { ...delegueForm, id_salle: delegueForm.id_salle ? parseInt(delegueForm.id_salle) : null };
+      const dataToInsert = {
+        ...delegueForm,
+        id_salle: delegueForm.id_salle ? parseInt(delegueForm.id_salle) : null,
+        niveau: delegueForm.niveau || null,
+      };
       const { error } = await supabase.from('delegues').insert([dataToInsert]);
       if (error) throw error;
-      setDelegueForm({ nom: '', prenom: '', email: '', telephone: '', id_salle: '' });
+      setDelegueForm({ nom: '', prenom: '', email: '', telephone: '', id_salle: '', niveau: '' });
       refetch();
       toast.success('Délégué ajouté !');
     } catch (err: any) {
@@ -208,7 +236,6 @@ const AdminDashboard = ({ onLogout }: AdminDashboardProps) => {
     }
   };
 
-  // Supprimer un professeur
   const handleDeleteProf = async (id: number) => {
     if (!confirm('Supprimer ce professeur ?')) return;
     const { error } = await supabase.from('professeurs').delete().eq('id_prof', id);
@@ -216,12 +243,28 @@ const AdminDashboard = ({ onLogout }: AdminDashboardProps) => {
     else { refetch(); toast.success('Professeur supprimé.'); }
   };
 
-  // Supprimer un délégué
   const handleDeleteDelegue = async (id: number) => {
     if (!confirm('Supprimer ce délégué ?')) return;
     const { error } = await supabase.from('delegues').delete().eq('id_delegue', id);
     if (error) toast.error(error.message);
     else { refetch(); toast.success('Délégué supprimé.'); }
+  };
+
+  const handleSaveConfig = async () => {
+    setSavingConfig(true);
+    try {
+      await saveConfigPlanning({
+        date_semaine: configForm.date_semaine,
+        nb_colonnes: parseInt(configForm.nb_colonnes),
+        nb_lignes: parseInt(configForm.nb_lignes),
+      });
+      setShowConfigForm(false);
+      toast.success('Configuration sauvegardée !');
+    } catch (err: any) {
+      toast.error(`Erreur: ${err.message}`);
+    } finally {
+      setSavingConfig(false);
+    }
   };
 
   if (loading) {
@@ -245,6 +288,7 @@ const AdminDashboard = ({ onLogout }: AdminDashboardProps) => {
 
   const tabs: { key: Tab; label: string; icon: any }[] = [
     { key: 'planning', label: 'Planning', icon: CalendarDays },
+    { key: 'aujourdhui', label: "Aujourd'hui", icon: Clock },
     { key: 'cours', label: 'Cours', icon: BookOpen },
     { key: 'salles', label: 'Salles', icon: Building2 },
     { key: 'professeurs', label: 'Professeurs', icon: Users },
@@ -285,14 +329,14 @@ const AdminDashboard = ({ onLogout }: AdminDashboardProps) => {
         </div>
 
         {/* Onglets */}
-        <div className="flex gap-1 rounded-xl border border-border bg-card p-1">
+        <div className="flex gap-1 overflow-x-auto rounded-xl border border-border bg-card p-1">
           {tabs.map(tab => {
             const Icon = tab.icon;
             return (
               <button
                 key={tab.key}
                 onClick={() => setActiveTab(tab.key)}
-                className={`flex flex-1 items-center justify-center gap-2 rounded-lg px-3 py-2 text-sm font-semibold transition ${
+                className={`flex flex-1 items-center justify-center gap-2 rounded-lg px-3 py-2 text-sm font-semibold transition whitespace-nowrap ${
                   activeTab === tab.key
                     ? 'gradient-esgis text-primary-foreground shadow'
                     : 'text-muted-foreground hover:bg-muted'
@@ -313,14 +357,20 @@ const AdminDashboard = ({ onLogout }: AdminDashboardProps) => {
                 <div>
                   <h2 className="font-heading text-xl font-bold text-foreground">{planning.titre}</h2>
                   <p className="text-sm text-muted-foreground">{planning.date_debut} → {planning.date_fin}</p>
+                  {configPlanning?.date_semaine && (
+                    <p className="mt-1 text-xs font-semibold text-primary">📅 Semaine : {configPlanning.date_semaine}</p>
+                  )}
                 </div>
-                <div className="flex gap-2">
+                <div className="flex flex-wrap gap-2">
+                  <button onClick={() => { setConfigForm({ date_semaine: configPlanning?.date_semaine || '', nb_colonnes: configPlanning?.nb_colonnes?.toString() || '1', nb_lignes: configPlanning?.nb_lignes?.toString() || '6' }); setShowConfigForm(v => !v); }} className="flex items-center gap-2 rounded-lg border border-border bg-card px-4 py-2 font-heading text-sm font-semibold text-foreground transition hover:bg-muted">
+                    <Settings className="h-4 w-4" /> Configurer
+                  </button>
                   <button onClick={() => setShowForm(v => !v)} className="flex items-center gap-2 rounded-lg border border-border bg-card px-4 py-2 font-heading text-sm font-semibold text-foreground transition hover:bg-muted">
                     <Plus className="h-4 w-4" /> Ajouter
                   </button>
                   <button
                     onClick={() => setWhatsappModalOpen(true)}
-                    className="flex items-center gap-2 rounded-lg bg-green-600 px-4 py-2 font-heading text-sm font-bold text-white transition hover:bg-green-700"
+                    className="flex items-center gap-2 rounded-lg bg-green-600 px-4 py-2 font-heading text-sm font-bold text-primary-foreground transition hover:bg-green-700"
                     title="Envoyer via WhatsApp"
                   >
                     <MessageCircle className="h-4 w-4" /> WhatsApp
@@ -335,6 +385,38 @@ const AdminDashboard = ({ onLogout }: AdminDashboardProps) => {
                       ? <><CheckCircle className="h-4 w-4" /> Publié</>
                       : <><Send className="h-4 w-4" /> C'est Parti !</>}
                   </button>
+                </div>
+              </div>
+            )}
+
+            {/* Config planning form */}
+            {showConfigForm && (
+              <div className="rounded-xl border border-border bg-card p-6 space-y-4 animate-fade-in">
+                <h3 className="font-heading text-sm font-bold text-foreground flex items-center gap-2">
+                  <Settings className="h-4 w-4" /> Configurer la semaine
+                </h3>
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+                  <div>
+                    <label className="mb-1 block text-xs font-semibold text-muted-foreground">Date de la semaine</label>
+                    <input type="text" placeholder="ex: 16 au 21 mars 2026" value={configForm.date_semaine} onChange={e => setConfigForm(p => ({ ...p, date_semaine: e.target.value }))} className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring" />
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-xs font-semibold text-muted-foreground">Colonnes par jour</label>
+                    <select value={configForm.nb_colonnes} onChange={e => setConfigForm(p => ({ ...p, nb_colonnes: e.target.value }))} className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring">
+                      <option value="1">1 colonne (Licence 3)</option>
+                      <option value="2">2 colonnes (Licence 1 & 2)</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-xs font-semibold text-muted-foreground">Nombre de lignes</label>
+                    <input type="number" min="1" max="12" value={configForm.nb_lignes} onChange={e => setConfigForm(p => ({ ...p, nb_lignes: e.target.value }))} className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring" />
+                  </div>
+                </div>
+                <div className="flex gap-2">
+                  <button onClick={handleSaveConfig} disabled={savingConfig} className="rounded-lg gradient-esgis px-6 py-2 font-heading text-sm font-bold text-primary-foreground shadow-esgis disabled:opacity-60">
+                    {savingConfig ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Sauvegarder'}
+                  </button>
+                  <button onClick={() => setShowConfigForm(false)} className="rounded-lg border border-border px-4 py-2 text-sm text-muted-foreground hover:bg-muted">Annuler</button>
                 </div>
               </div>
             )}
@@ -404,6 +486,63 @@ const AdminDashboard = ({ onLogout }: AdminDashboardProps) => {
           </>
         )}
 
+        {/* ===== ONGLET AUJOURD'HUI ===== */}
+        {activeTab === 'aujourdhui' && (
+          <div className="space-y-6">
+            <div className="flex items-center justify-between">
+              <h2 className="font-heading text-xl font-bold text-foreground">Séances du jour</h2>
+              <span className="rounded-full bg-primary px-3 py-1 font-heading text-sm font-bold text-primary-foreground">
+                {todaySeances.length} séance{todaySeances.length !== 1 ? 's' : ''} aujourd'hui
+              </span>
+            </div>
+
+            {todaySeances.length === 0 ? (
+              <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-border py-16">
+                <Clock className="mb-3 h-10 w-10 text-muted-foreground" />
+                <p className="font-heading text-lg font-semibold text-muted-foreground">Aucune séance programmée aujourd'hui</p>
+                <p className="text-sm text-muted-foreground">{new Date().toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}</p>
+              </div>
+            ) : (
+              <div className="rounded-xl border border-border bg-card overflow-hidden">
+                <table className="w-full text-sm">
+                  <thead className="bg-muted/50">
+                    <tr>
+                      <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground">Heure</th>
+                      <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground">Cours</th>
+                      <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground">Salle</th>
+                      <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground">Professeur(s)</th>
+                      <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground">Type</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-border">
+                    {todaySeances.map(s => {
+                      const c = cours.find(co => co.id_cours === s.id_cours);
+                      const sa = salles.find(sl => sl.id_salle === s.id_salle);
+                      const profs = s.professeurs.map(sp => professeurs.find(p => p.id_prof === sp.id_prof)).filter(Boolean);
+                      return (
+                        <tr key={s.id_seance} className="hover:bg-muted/30">
+                          <td className="px-4 py-3 font-mono text-xs text-foreground">{s.heure_debut} - {s.heure_fin}</td>
+                          <td className="px-4 py-3 font-semibold text-foreground">{c?.nom_cours} <span className="text-muted-foreground font-normal">({c?.code_cours})</span></td>
+                          <td className="px-4 py-3 text-muted-foreground">{sa?.nom_salle} — {sa?.pole}</td>
+                          <td className="px-4 py-3 text-muted-foreground">{profs.map(p => `${p!.prenom} ${p!.nom}`).join(', ') || '—'}</td>
+                          <td className="px-4 py-3">
+                            <span className={cn(
+                              'rounded-full px-2 py-0.5 text-xs font-bold uppercase',
+                              s.type_seance === 'cours' ? 'bg-esgis-cours text-primary-foreground' : 'bg-esgis-examen text-primary-foreground'
+                            )}>
+                              {s.type_seance}
+                            </span>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        )}
+
         {/* ===== ONGLET COURS ===== */}
         {activeTab === 'cours' && (
           <div className="space-y-6">
@@ -411,7 +550,7 @@ const AdminDashboard = ({ onLogout }: AdminDashboardProps) => {
               <h3 className="font-heading text-sm font-bold text-foreground flex items-center gap-2">
                 <Plus className="h-4 w-4" /> Ajouter un cours
               </h3>
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
                 <div>
                   <label className="mb-1 block text-xs font-semibold text-muted-foreground">Nom du cours *</label>
                   <input type="text" placeholder="ex: Algorithmique Avancée" value={coursForm.nom_cours} onChange={e => setCoursForm(p => ({ ...p, nom_cours: e.target.value }))} className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring" />
@@ -419,6 +558,10 @@ const AdminDashboard = ({ onLogout }: AdminDashboardProps) => {
                 <div>
                   <label className="mb-1 block text-xs font-semibold text-muted-foreground">Code cours *</label>
                   <input type="text" placeholder="ex: INFO301" value={coursForm.code_cours} onChange={e => setCoursForm(p => ({ ...p, code_cours: e.target.value }))} className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring" />
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs font-semibold text-muted-foreground">Volume horaire total (h)</label>
+                  <input type="number" placeholder="ex: 24" value={coursForm.heures_total} onChange={e => setCoursForm(p => ({ ...p, heures_total: e.target.value }))} className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring" />
                 </div>
                 <div>
                   <label className="mb-1 block text-xs font-semibold text-muted-foreground">Description</label>
@@ -436,23 +579,46 @@ const AdminDashboard = ({ onLogout }: AdminDashboardProps) => {
                   <tr>
                     <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground">Code</th>
                     <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground">Nom</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground">Vol. horaire</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground">Progression</th>
                     <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground">Description</th>
                     <th className="px-4 py-3 text-right text-xs font-semibold text-muted-foreground">Action</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border">
-                  {cours.map(c => (
-                    <tr key={c.id_cours} className="hover:bg-muted/30">
-                      <td className="px-4 py-3 font-mono text-xs text-primary">{c.code_cours}</td>
-                      <td className="px-4 py-3 font-semibold text-foreground">{c.nom_cours}</td>
-                      <td className="px-4 py-3 text-muted-foreground">{c.description || '—'}</td>
-                      <td className="px-4 py-3 text-right">
-                        <button onClick={() => handleDeleteCours(c.id_cours)} className="rounded-lg p-1.5 text-destructive hover:bg-destructive/10 transition">
-                          <Trash2 className="h-4 w-4" />
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
+                  {cours.map(c => {
+                    const { done, total } = getCoursProgress(c.id_cours);
+                    const pct = total > 0 ? Math.min(100, (done / total) * 100) : 0;
+                    const isComplete = total > 0 && done >= total;
+                    return (
+                      <tr key={c.id_cours} className="hover:bg-muted/30">
+                        <td className="px-4 py-3 font-mono text-xs text-primary">{c.code_cours}</td>
+                        <td className="px-4 py-3 font-semibold text-foreground">{c.nom_cours}</td>
+                        <td className="px-4 py-3 text-muted-foreground">{total > 0 ? `${total}h` : '—'}</td>
+                        <td className="px-4 py-3">
+                          {total > 0 ? (
+                            <div className="space-y-1">
+                              <div className="flex items-center gap-2">
+                                <div className="h-2 w-24 overflow-hidden rounded-full bg-muted">
+                                  <div className={cn('h-full rounded-full', isComplete ? 'bg-green-500' : 'bg-primary')} style={{ width: `${pct}%` }} />
+                                </div>
+                                <span className="text-xs text-muted-foreground">{done}h/{total}h</span>
+                                {isComplete && <CheckCircle className="h-4 w-4 text-green-500" />}
+                              </div>
+                            </div>
+                          ) : (
+                            <span className="text-xs text-muted-foreground">—</span>
+                          )}
+                        </td>
+                        <td className="px-4 py-3 text-muted-foreground">{c.description || '—'}</td>
+                        <td className="px-4 py-3 text-right">
+                          <button onClick={() => handleDeleteCours(c.id_cours)} className="rounded-lg p-1.5 text-destructive hover:bg-destructive/10 transition">
+                            <Trash2 className="h-4 w-4" />
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
@@ -590,7 +756,7 @@ const AdminDashboard = ({ onLogout }: AdminDashboardProps) => {
               <h3 className="font-heading text-sm font-bold text-foreground flex items-center gap-2">
                 <Plus className="h-4 w-4" /> Ajouter un délégué
               </h3>
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5">
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-6">
                 <div>
                   <label className="mb-1 block text-xs font-semibold text-muted-foreground">Nom *</label>
                   <input type="text" placeholder="ex: Mensah" value={delegueForm.nom} onChange={e => setDelegueForm(p => ({ ...p, nom: e.target.value }))} className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring" />
@@ -606,6 +772,15 @@ const AdminDashboard = ({ onLogout }: AdminDashboardProps) => {
                 <div>
                   <label className="mb-1 block text-xs font-semibold text-muted-foreground">Téléphone</label>
                   <input type="tel" placeholder="ex: +228 XX XX XX XX" value={delegueForm.telephone} onChange={e => setDelegueForm(p => ({ ...p, telephone: e.target.value }))} className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring" />
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs font-semibold text-muted-foreground">Niveau</label>
+                  <select value={delegueForm.niveau} onChange={e => setDelegueForm(p => ({ ...p, niveau: e.target.value }))} className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring">
+                    <option value="">Choisir…</option>
+                    <option value="Licence 1">Licence 1</option>
+                    <option value="Licence 2">Licence 2</option>
+                    <option value="Licence 3">Licence 3</option>
+                  </select>
                 </div>
                 <div>
                   <label className="mb-1 block text-xs font-semibold text-muted-foreground">Salle</label>
@@ -627,6 +802,7 @@ const AdminDashboard = ({ onLogout }: AdminDashboardProps) => {
                     <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground">Nom complet</th>
                     <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground">Email</th>
                     <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground">Téléphone</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground">Niveau</th>
                     <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground">Salle</th>
                     <th className="px-4 py-3 text-right text-xs font-semibold text-muted-foreground">Action</th>
                   </tr>
@@ -639,6 +815,11 @@ const AdminDashboard = ({ onLogout }: AdminDashboardProps) => {
                         <td className="px-4 py-3 font-semibold text-foreground">{d.prenom} {d.nom}</td>
                         <td className="px-4 py-3 text-muted-foreground text-sm">{d.email || '—'}</td>
                         <td className="px-4 py-3 text-muted-foreground text-sm font-mono">{d.telephone || '—'}</td>
+                        <td className="px-4 py-3">
+                          {d.niveau ? (
+                            <span className="rounded-full bg-primary/10 px-2 py-0.5 text-xs font-semibold text-primary">{d.niveau}</span>
+                          ) : '—'}
+                        </td>
                         <td className="px-4 py-3 text-muted-foreground text-sm">{salle?.nom_salle || '—'}</td>
                         <td className="px-4 py-3 text-right">
                           <button onClick={() => handleDeleteDelegue(d.id_delegue)} className="rounded-lg p-1.5 text-destructive hover:bg-destructive/10 transition">
