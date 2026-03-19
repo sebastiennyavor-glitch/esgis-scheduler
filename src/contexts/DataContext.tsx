@@ -111,6 +111,13 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
     await fetchAll();
   };
 
+  const deleteSeance = async (id: number) => {
+    await supabase.from('seance_professeurs').delete().eq('id_seance', id);
+    const { error } = await supabase.from('seances').delete().eq('id_seance', id);
+    if (error) throw new Error(error.message);
+    await fetchAll();
+  };
+
   const updateEmploiStatut = async (id: number, statut: 'brouillon' | 'publié') => {
     const { error } = await supabase.from('emploi_temps').update({ statut }).eq('id_emploi', id);
     if (error) throw new Error(error.message);

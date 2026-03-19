@@ -86,6 +86,15 @@ const AdminDashboard = ({ onLogout }: AdminDashboardProps) => {
     return { done: Math.round(done * 10) / 10, total };
   };
 
+  const handleDeleteSeance = async (id: number) => {
+    try {
+      await deleteSeance(id);
+      toast.success('Séance supprimée du planning.');
+    } catch (err: any) {
+      toast.error(`Erreur: ${err.message}`);
+    }
+  };
+
   const handlePublish = async () => {
     if (!planning) return;
     try {
