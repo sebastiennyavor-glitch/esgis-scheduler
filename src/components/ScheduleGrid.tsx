@@ -6,6 +6,7 @@ interface ScheduleGridProps {
   showPole?: boolean;
   showRole?: boolean;
   profId?: number;
+  onDeleteSeance?: (id: number) => void;
 }
 
 const JOURS = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi'];
