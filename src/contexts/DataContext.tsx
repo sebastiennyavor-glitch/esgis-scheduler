@@ -15,6 +15,7 @@ interface DataContextType {
   refresh: () => Promise<void>;
   refetch: () => Promise<void>;
   addSeance: (seance: Omit<Seance, 'id_seance'>) => Promise<void>;
+  deleteSeance: (id: number) => Promise<void>;
   addCours: (nom: string, code: string) => Promise<void>;
   deleteCours: (id: number) => Promise<void>;
   updateEmploiStatut: (id: number, statut: 'brouillon' | 'publié') => Promise<void>;
