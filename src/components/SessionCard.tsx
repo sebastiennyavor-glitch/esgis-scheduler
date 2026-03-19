@@ -1,6 +1,6 @@
 import { Seance } from '@/types';
 import { useData } from '@/contexts/DataContext';
-import { MapPin, Clock, User, BookOpen, FileText, CheckCircle } from 'lucide-react';
+import { MapPin, Clock, User, BookOpen, FileText, CheckCircle, Trash2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface SessionCardProps {
@@ -8,9 +8,10 @@ interface SessionCardProps {
   showPole?: boolean;
   showRole?: boolean;
   profId?: number;
+  onDelete?: () => void;
 }
 
-const SessionCard = ({ seance, showPole = false, showRole = false, profId }: SessionCardProps) => {
+const SessionCard = ({ seance, showPole = false, showRole = false, profId, onDelete }: SessionCardProps) => {
   const { cours, salles, professeurs, seances } = useData();
   const coursInfo = cours.find(c => c.id_cours === seance.id_cours);
   const salleInfo = salles.find(s => s.id_salle === seance.id_salle);
@@ -40,6 +41,15 @@ const SessionCard = ({ seance, showPole = false, showRole = false, profId }: Ses
       isCours ? 'session-cours' : 'session-examen'
     )}>
       <div className="flex items-start justify-between gap-2">
+        {onDelete && (
+          <button
+            onClick={(e) => { e.stopPropagation(); if (confirm('Supprimer cette séance du planning ?')) onDelete(); }}
+            className="mt-1 shrink-0 rounded-md p-1 text-destructive/60 transition hover:bg-destructive/10 hover:text-destructive"
+            title="Supprimer cette séance"
+          >
+            <Trash2 className="h-4 w-4" />
+          </button>
+        )}
         <div className="flex-1 space-y-2">
           <div className="flex items-center gap-2 flex-wrap">
             {isCours ? (

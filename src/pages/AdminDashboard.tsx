@@ -15,7 +15,7 @@ interface AdminDashboardProps {
 type Tab = 'planning' | 'cours' | 'salles' | 'professeurs' | 'delegues' | 'aujourdhui';
 
 const AdminDashboard = ({ onLogout }: AdminDashboardProps) => {
-  const { seances, emploiTemps, salles, cours, professeurs, delegues, configPlanning, loading, error, addSeance, updateEmploiStatut, refetch, saveConfigPlanning } = useData();
+  const { seances, emploiTemps, salles, cours, professeurs, delegues, configPlanning, loading, error, addSeance, deleteSeance, updateEmploiStatut, refetch, saveConfigPlanning } = useData();
   const [currentWeek, setCurrentWeek] = useState<1 | 2 | 3 | 4>(1);
   const [published, setPublished] = useState(false);
   const [showForm, setShowForm] = useState(false);
@@ -84,6 +84,15 @@ const AdminDashboard = ({ onLogout }: AdminDashboardProps) => {
       return sum + (hf + mf / 60) - (hd + md / 60);
     }, 0);
     return { done: Math.round(done * 10) / 10, total };
+  };
+
+  const handleDeleteSeance = async (id: number) => {
+    try {
+      await deleteSeance(id);
+      toast.success('Séance supprimée du planning.');
+    } catch (err: any) {
+      toast.error(`Erreur: ${err.message}`);
+    }
   };
 
   const handlePublish = async () => {
@@ -482,7 +491,7 @@ const AdminDashboard = ({ onLogout }: AdminDashboardProps) => {
             )}
 
             <WeekNavigation currentWeek={currentWeek} onWeekChange={setCurrentWeek} />
-            <ScheduleGrid seances={weekSeances} />
+            <ScheduleGrid seances={weekSeances} onDeleteSeance={handleDeleteSeance} />
           </>
         )}
 

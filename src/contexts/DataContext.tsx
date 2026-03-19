@@ -15,6 +15,7 @@ interface DataContextType {
   refresh: () => Promise<void>;
   refetch: () => Promise<void>;
   addSeance: (seance: Omit<Seance, 'id_seance'>) => Promise<void>;
+  deleteSeance: (id: number) => Promise<void>;
   addCours: (nom: string, code: string) => Promise<void>;
   deleteCours: (id: number) => Promise<void>;
   updateEmploiStatut: (id: number, statut: 'brouillon' | 'publié') => Promise<void>;
@@ -110,6 +111,13 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
     await fetchAll();
   };
 
+  const deleteSeance = async (id: number) => {
+    await supabase.from('seance_professeurs').delete().eq('id_seance', id);
+    const { error } = await supabase.from('seances').delete().eq('id_seance', id);
+    if (error) throw new Error(error.message);
+    await fetchAll();
+  };
+
   const updateEmploiStatut = async (id: number, statut: 'brouillon' | 'publié') => {
     const { error } = await supabase.from('emploi_temps').update({ statut }).eq('id_emploi', id);
     if (error) throw new Error(error.message);
@@ -138,7 +146,7 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
   return (
     <DataContext.Provider value={{ 
       cours, professeurs, salles, delegues, emploiTemps, seances, configPlanning, loading, error, 
-      refresh: fetchAll, refetch: fetchAll, addSeance, addCours, deleteCours, updateEmploiStatut, saveConfigPlanning
+      refresh: fetchAll, refetch: fetchAll, addSeance, deleteSeance, addCours, deleteCours, updateEmploiStatut, saveConfigPlanning
     }}>
       {children}
     </DataContext.Provider>

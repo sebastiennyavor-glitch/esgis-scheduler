@@ -6,12 +6,13 @@ interface ScheduleGridProps {
   showPole?: boolean;
   showRole?: boolean;
   profId?: number;
+  onDeleteSeance?: (id: number) => void;
 }
 
 const JOURS = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi'];
 const JOUR_MAP: Record<number, string> = { 1: 'Lundi', 2: 'Mardi', 3: 'Mercredi', 4: 'Jeudi', 5: 'Vendredi', 6: 'Samedi' };
 
-const ScheduleGrid = ({ seances, showPole = false, showRole = false, profId }: ScheduleGridProps) => {
+const ScheduleGrid = ({ seances, showPole = false, showRole = false, profId, onDeleteSeance }: ScheduleGridProps) => {
   const getJour = (date: string) => {
     const d = new Date(date);
     const day = d.getDay();
@@ -52,6 +53,7 @@ const ScheduleGrid = ({ seances, showPole = false, showRole = false, profId }: S
                   showPole={showPole}
                   showRole={showRole}
                   profId={profId}
+                  onDelete={onDeleteSeance ? () => onDeleteSeance(seance.id_seance) : undefined}
                 />
               ))}
             </div>

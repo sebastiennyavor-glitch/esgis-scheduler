@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useData } from '@/contexts/DataContext';
 import WeekNavigation from '@/components/WeekNavigation';
 import ScheduleGrid from '@/components/ScheduleGrid';
-import { LogOut, CalendarDays, Printer, MapPin, Loader2 } from 'lucide-react';
+import { LogOut, CalendarDays, Printer, MapPin, Loader2, Share2 } from 'lucide-react';
 
 interface DelegateDashboardProps {
   delegueId: number;
@@ -57,12 +57,26 @@ const DelegateDashboard = ({ delegueId, onLogout }: DelegateDashboardProps) => {
               </p>
             </div>
           </div>
-          <button
-            onClick={() => window.print()}
-            className="flex items-center gap-2 rounded-lg border border-border bg-card px-4 py-2 font-heading text-sm font-semibold text-foreground transition hover:bg-muted print:hidden"
-          >
-            <Printer className="h-4 w-4" /> Imprimer
-          </button>
+          <div className="flex gap-2">
+            <button
+              onClick={() => {
+                const message = encodeURIComponent(
+                  `📋 Planning ESGIS — ${salle?.nom_salle} (Pôle ${salle?.pole})\nSemaine ${currentWeek}\n\nConsultez le planning ici : https://esgis-program.vercel.app\nMot de passe : delegue@2026`
+                );
+                window.open(`https://wa.me/?text=${message}`, '_blank');
+              }}
+              className="flex items-center gap-2 rounded-lg bg-green-600 px-4 py-2 font-heading text-sm font-bold text-primary-foreground transition hover:bg-green-700 print:hidden"
+              title="Partager via WhatsApp"
+            >
+              <Share2 className="h-4 w-4" /> Partager
+            </button>
+            <button
+              onClick={() => window.print()}
+              className="flex items-center gap-2 rounded-lg border border-border bg-card px-4 py-2 font-heading text-sm font-semibold text-foreground transition hover:bg-muted print:hidden"
+            >
+              <Printer className="h-4 w-4" /> Imprimer
+            </button>
+          </div>
         </div>
 
         <div className="print:hidden">
