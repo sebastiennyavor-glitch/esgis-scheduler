@@ -1,6 +1,6 @@
 import { Seance } from '@/types';
 import { useData } from '@/contexts/DataContext';
-import { MapPin, Clock, User, BookOpen, FileText, CheckCircle } from 'lucide-react';
+import { MapPin, Clock, User, BookOpen, FileText, CheckCircle, Trash2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface SessionCardProps {
@@ -8,9 +8,10 @@ interface SessionCardProps {
   showPole?: boolean;
   showRole?: boolean;
   profId?: number;
+  onDelete?: () => void;
 }
 
-const SessionCard = ({ seance, showPole = false, showRole = false, profId }: SessionCardProps) => {
+const SessionCard = ({ seance, showPole = false, showRole = false, profId, onDelete }: SessionCardProps) => {
   const { cours, salles, professeurs, seances } = useData();
   const coursInfo = cours.find(c => c.id_cours === seance.id_cours);
   const salleInfo = salles.find(s => s.id_salle === seance.id_salle);
