@@ -3,7 +3,7 @@ import { useData } from '@/contexts/DataContext';
 import WeekNavigation from '@/components/WeekNavigation';
 import ScheduleGrid from '@/components/ScheduleGrid';
 import WhatsAppModal from '@/components/WhatsAppModal';
-import { LogOut, CalendarDays, Send, CircleCheck as CheckCircle, Plus, ChartBar as BarChart3, Loader as Loader2, BookOpen, Building2, Users, Trash2, MessageCircle, Clock, MapPin, Settings, FileText } from 'lucide-react';
+import { LogOut, CalendarDays, Send, CircleCheck as CheckCircle, Plus, ChartBar as BarChart3, Loader as Loader2, BookOpen, Building2, Users, Trash2, MessageCircle, Clock, MapPin, Settings, FileText, AlertTriangle, Eye, EyeOff } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase';
 import { cn } from '@/lib/utils';
@@ -12,10 +12,19 @@ interface AdminDashboardProps {
   onLogout: () => void;
 }
 
-type Tab = 'planning' | 'cours' | 'salles' | 'professeurs' | 'delegues' | 'aujourdhui';
+type Tab = 'planning' | 'cours' | 'salles' | 'professeurs' | 'delegues' | 'aujourdhui' | 'disponibilites';
+
+const JOURS = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi'];
+const CRENEAUX = [
+  { label: '08h - 10h', debut: '08:00', fin: '10:00' },
+  { label: '10h - 12h', debut: '10:00', fin: '12:00' },
+  { label: '14h - 16h', debut: '14:00', fin: '16:00' },
+  { label: '16h - 18h', debut: '16:00', fin: '18:00' },
+  { label: '19h - 21h30', debut: '19:00', fin: '21:30' },
+];
 
 const AdminDashboard = ({ onLogout }: AdminDashboardProps) => {
-  const { seances, emploiTemps, salles, cours, professeurs, delegues, configPlanning, loading, error, addSeance, deleteSeance, updateEmploiStatut, refetch, saveConfigPlanning } = useData();
+  const { seances, emploiTemps, salles, cours, professeurs, delegues, configPlanning, disponibilites, loading, error, addSeance, deleteSeance, updateEmploiStatut, refetch, saveConfigPlanning } = useData();
   const [currentWeek, setCurrentWeek] = useState<1 | 2 | 3 | 4>(1);
   const [published, setPublished] = useState(false);
   const [showForm, setShowForm] = useState(false);
@@ -23,6 +32,7 @@ const AdminDashboard = ({ onLogout }: AdminDashboardProps) => {
   const [activeTab, setActiveTab] = useState<Tab>('planning');
   const [whatsappModalOpen, setWhatsappModalOpen] = useState(false);
   const [showConfigForm, setShowConfigForm] = useState(false);
+  const [dispoFilterJour, setDispoFilterJour] = useState('Lundi');
 
   // Formulaire séance
   const [formData, setFormData] = useState({
@@ -44,8 +54,9 @@ const AdminDashboard = ({ onLogout }: AdminDashboardProps) => {
   const [addingSalle, setAddingSalle] = useState(false);
 
   // Formulaire nouveau professeur
-  const [profForm, setProfForm] = useState({ nom: '', prenom: '', email: '', specialite: '', telephone: '' });
+  const [profForm, setProfForm] = useState({ nom: '', prenom: '', email: '', specialite: '', telephone: '', mot_de_passe: '' });
   const [addingProf, setAddingProf] = useState(false);
+  const [showPasswords, setShowPasswords] = useState<Record<number, boolean>>({});
 
   // Formulaire nouveau délégué
   const [delegueForm, setDelegueForm] = useState({ nom: '', prenom: '', email: '', telephone: '', id_salle: '', niveau: '' });
@@ -73,7 +84,6 @@ const AdminDashboard = ({ onLogout }: AdminDashboardProps) => {
     poles: 3,
   };
 
-  // Calculate hours per cours
   const getCoursProgress = (id_cours: number) => {
     const coursInfo = cours.find(c => c.id_cours === id_cours);
     const total = coursInfo?.heures_total || 0;
@@ -84,6 +94,44 @@ const AdminDashboard = ({ onLogout }: AdminDashboardProps) => {
       return sum + (hf + mf / 60) - (hd + md / 60);
     }, 0);
     return { done: Math.round(done * 10) / 10, total };
+  };
+
+  // Helper: get prof availability status for a given day/time
+  const getProfAvailabilityStatus = (profId: number, date: string, heureDebut: string, heureFin: string): 'available' | 'unavailable' | 'unknown' | 'conflict' => {
+    // Check for conflicts first (prof already assigned to another session at same time)
+    const d = new Date(date);
+    const jourIndex = d.getDay();
+    const jourMap: Record<number, string> = { 1: 'Lundi', 2: 'Mardi', 3: 'Mercredi', 4: 'Jeudi', 5: 'Vendredi', 6: 'Samedi' };
+    const jour = jourMap[jourIndex];
+
+    // Check conflict: same date, overlapping time, prof already assigned
+    const conflicting = seances.find(s => {
+      if (s.date !== date) return false;
+      if (!s.professeurs.some(sp => sp.id_prof === profId)) return false;
+      // Check time overlap
+      return s.heure_debut < heureFin && s.heure_fin > heureDebut;
+    });
+    if (conflicting) return 'conflict';
+
+    // Check availability
+    if (!jour) return 'unknown';
+    const dispo = disponibilites.find(
+      dd => dd.id_prof === profId && dd.jour === jour && dd.heure_debut === heureDebut
+    );
+    if (!dispo) return 'unknown';
+    return dispo.disponible ? 'available' : 'unavailable';
+  };
+
+  const getConflictMessage = (profId: number, date: string, heureDebut: string, heureFin: string): string | null => {
+    const conflicting = seances.find(s => {
+      if (s.date !== date) return false;
+      if (!s.professeurs.some(sp => sp.id_prof === profId)) return false;
+      return s.heure_debut < heureFin && s.heure_fin > heureDebut;
+    });
+    if (!conflicting) return null;
+    const prof = professeurs.find(p => p.id_prof === profId);
+    const c = cours.find(co => co.id_cours === conflicting.id_cours);
+    return `⚠️ Conflit : Prof ${prof?.prenom} ${prof?.nom} est déjà assigné à ${c?.nom_cours} sur ce créneau`;
   };
 
   const handleDeleteSeance = async (id: number) => {
@@ -112,6 +160,14 @@ const AdminDashboard = ({ onLogout }: AdminDashboardProps) => {
       toast.error('Veuillez remplir tous les champs obligatoires.');
       return;
     }
+    // Check for conflicts
+    for (const pid of formData.profIds) {
+      const msg = getConflictMessage(pid, formData.date, formData.heure_debut, formData.heure_fin);
+      if (msg) {
+        toast.error(msg);
+        return;
+      }
+    }
     setSubmitting(true);
     try {
       await addSeance({
@@ -139,6 +195,14 @@ const AdminDashboard = ({ onLogout }: AdminDashboardProps) => {
   };
 
   const toggleProf = (id: number) => {
+    // Check for conflict before adding
+    if (!formData.profIds.includes(id) && formData.date && formData.heure_debut && formData.heure_fin) {
+      const msg = getConflictMessage(id, formData.date, formData.heure_debut, formData.heure_fin);
+      if (msg) {
+        toast.error(msg);
+        return;
+      }
+    }
     setFormData(prev => ({
       ...prev,
       profIds: prev.profIds.includes(id)
@@ -209,9 +273,13 @@ const AdminDashboard = ({ onLogout }: AdminDashboardProps) => {
     }
     setAddingProf(true);
     try {
-      const { error } = await supabase.from('professeurs').insert([profForm]);
+      const dataToInsert = {
+        ...profForm,
+        mot_de_passe: profForm.mot_de_passe || null,
+      };
+      const { error } = await supabase.from('professeurs').insert([dataToInsert]);
       if (error) throw error;
-      setProfForm({ nom: '', prenom: '', email: '', specialite: '', telephone: '' });
+      setProfForm({ nom: '', prenom: '', email: '', specialite: '', telephone: '', mot_de_passe: '' });
       refetch();
       toast.success('Professeur ajouté !');
     } catch (err: any) {
@@ -219,6 +287,12 @@ const AdminDashboard = ({ onLogout }: AdminDashboardProps) => {
     } finally {
       setAddingProf(false);
     }
+  };
+
+  const handleUpdateProfPassword = async (profId: number, newPassword: string) => {
+    const { error } = await supabase.from('professeurs').update({ mot_de_passe: newPassword || null }).eq('id_prof', profId);
+    if (error) toast.error(error.message);
+    else { refetch(); toast.success('Mot de passe mis à jour.'); }
   };
 
   const handleAddDelegue = async () => {
@@ -302,7 +376,27 @@ const AdminDashboard = ({ onLogout }: AdminDashboardProps) => {
     { key: 'salles', label: 'Salles', icon: Building2 },
     { key: 'professeurs', label: 'Professeurs', icon: Users },
     { key: 'delegues', label: 'Délégués', icon: Users },
+    { key: 'disponibilites', label: 'Dispos', icon: Clock },
   ];
+
+  // Availability tab helpers
+  const getProfsForSlot = (jour: string, heureDebut: string) => {
+    return professeurs.map(p => {
+      const dispo = disponibilites.find(
+        d => d.id_prof === p.id_prof && d.jour === jour && d.heure_debut === heureDebut
+      );
+      // Check if prof is busy (has session at this time on any date matching this jour)
+      const isBusy = seances.some(s => {
+        const d = new Date(s.date);
+        const jourMap: Record<number, string> = { 1: 'Lundi', 2: 'Mardi', 3: 'Mercredi', 4: 'Jeudi', 5: 'Vendredi', 6: 'Samedi' };
+        return jourMap[d.getDay()] === jour && s.professeurs.some(sp => sp.id_prof === p.id_prof) && s.heure_debut === heureDebut;
+      });
+      return {
+        prof: p,
+        status: isBusy ? 'busy' as const : dispo ? (dispo.disponible ? 'available' as const : 'unavailable' as const) : 'unknown' as const,
+      };
+    });
+  };
 
   return (
     <div className="min-h-screen bg-background">
@@ -461,22 +555,57 @@ const AdminDashboard = ({ onLogout }: AdminDashboardProps) => {
                   </div>
                   <div>
                     <label className="mb-1 block text-xs font-semibold text-muted-foreground">Début</label>
-                    <input type="time" value={formData.heure_debut} onChange={e => setFormData(p => ({ ...p, heure_debut: e.target.value }))} className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring" />
+                    <select value={formData.heure_debut} onChange={e => setFormData(p => ({ ...p, heure_debut: e.target.value }))} className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring">
+                      {CRENEAUX.map(c => <option key={c.debut} value={c.debut}>{c.label.split(' - ')[0]}</option>)}
+                    </select>
                   </div>
                   <div>
                     <label className="mb-1 block text-xs font-semibold text-muted-foreground">Fin</label>
-                    <input type="time" value={formData.heure_fin} onChange={e => setFormData(p => ({ ...p, heure_fin: e.target.value }))} className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring" />
+                    <select value={formData.heure_fin} onChange={e => setFormData(p => ({ ...p, heure_fin: e.target.value }))} className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring">
+                      {CRENEAUX.map(c => <option key={c.fin} value={c.fin}>{c.label.split(' - ')[1] || c.fin}</option>)}
+                    </select>
                   </div>
                 </div>
                 <div>
-                  <label className="mb-2 block text-xs font-semibold text-muted-foreground">Professeurs (max 10)</label>
+                  <label className="mb-2 block text-xs font-semibold text-muted-foreground">Professeurs (max 10) — Sélectionnez date et heures pour voir la disponibilité</label>
                   <div className="flex flex-wrap gap-2">
-                    {professeurs.map(p => (
-                      <button key={p.id_prof} onClick={() => toggleProf(p.id_prof)}
-                        className={`rounded-full px-3 py-1 text-xs font-semibold transition ${formData.profIds.includes(p.id_prof) ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground hover:bg-muted/80'}`}>
-                        {p.prenom} {p.nom}
-                      </button>
-                    ))}
+                    {professeurs.map(p => {
+                      const isSelected = formData.profIds.includes(p.id_prof);
+                      let status: 'available' | 'unavailable' | 'unknown' | 'conflict' | null = null;
+                      if (formData.date && formData.heure_debut && formData.heure_fin) {
+                        status = getProfAvailabilityStatus(p.id_prof, formData.date, formData.heure_debut, formData.heure_fin);
+                      }
+                      const statusColors = {
+                        available: 'ring-2 ring-green-500',
+                        unavailable: 'ring-2 ring-destructive',
+                        unknown: 'ring-2 ring-yellow-500',
+                        conflict: 'ring-2 ring-destructive opacity-50 cursor-not-allowed',
+                      };
+                      return (
+                        <button
+                          key={p.id_prof}
+                          onClick={() => status !== 'conflict' && toggleProf(p.id_prof)}
+                          disabled={status === 'conflict'}
+                          className={cn(
+                            'rounded-full px-3 py-1 text-xs font-semibold transition',
+                            isSelected ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground hover:bg-muted/80',
+                            status && statusColors[status]
+                          )}
+                          title={
+                            status === 'conflict' ? 'Déjà assigné sur ce créneau' :
+                            status === 'unavailable' ? 'Non disponible' :
+                            status === 'available' ? 'Disponible' :
+                            status === 'unknown' ? 'Disponibilité non renseignée' : ''
+                          }
+                        >
+                          {status === 'available' && '✅ '}
+                          {status === 'unavailable' && '❌ '}
+                          {status === 'unknown' && '⚠️ '}
+                          {status === 'conflict' && '🚫 '}
+                          {p.prenom} {p.nom}
+                        </button>
+                      );
+                    })}
                   </div>
                 </div>
                 <div className="flex gap-2">
@@ -700,7 +829,7 @@ const AdminDashboard = ({ onLogout }: AdminDashboardProps) => {
               <h3 className="font-heading text-sm font-bold text-foreground flex items-center gap-2">
                 <Plus className="h-4 w-4" /> Ajouter un professeur
               </h3>
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5">
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
                 <div>
                   <label className="mb-1 block text-xs font-semibold text-muted-foreground">Nom *</label>
                   <input type="text" placeholder="ex: Mensah" value={profForm.nom} onChange={e => setProfForm(p => ({ ...p, nom: e.target.value }))} className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring" />
@@ -721,6 +850,10 @@ const AdminDashboard = ({ onLogout }: AdminDashboardProps) => {
                   <label className="mb-1 block text-xs font-semibold text-muted-foreground">Spécialité</label>
                   <input type="text" placeholder="ex: Informatique" value={profForm.specialite} onChange={e => setProfForm(p => ({ ...p, specialite: e.target.value }))} className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring" />
                 </div>
+                <div>
+                  <label className="mb-1 block text-xs font-semibold text-muted-foreground">Mot de passe</label>
+                  <input type="text" placeholder="ex: mensah2026" value={profForm.mot_de_passe} onChange={e => setProfForm(p => ({ ...p, mot_de_passe: e.target.value }))} className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring" />
+                </div>
               </div>
               <button onClick={handleAddProf} disabled={addingProf} className="flex items-center gap-2 rounded-lg gradient-esgis px-6 py-2 font-heading text-sm font-bold text-primary-foreground disabled:opacity-60">
                 {addingProf ? <Loader2 className="h-4 w-4 animate-spin" /> : <><Plus className="h-4 w-4" /> Ajouter</>}
@@ -735,6 +868,7 @@ const AdminDashboard = ({ onLogout }: AdminDashboardProps) => {
                     <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground">Email</th>
                     <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground">Téléphone</th>
                     <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground">Spécialité</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground">Mot de passe</th>
                     <th className="px-4 py-3 text-right text-xs font-semibold text-muted-foreground">Action</th>
                   </tr>
                 </thead>
@@ -745,6 +879,27 @@ const AdminDashboard = ({ onLogout }: AdminDashboardProps) => {
                       <td className="px-4 py-3 text-muted-foreground text-sm">{p.email || '—'}</td>
                       <td className="px-4 py-3 text-muted-foreground text-sm font-mono">{p.telephone || '—'}</td>
                       <td className="px-4 py-3 text-muted-foreground text-sm">{p.specialite || '—'}</td>
+                      <td className="px-4 py-3">
+                        <div className="flex items-center gap-1">
+                          <input
+                            type={showPasswords[p.id_prof] ? 'text' : 'password'}
+                            defaultValue={p.mot_de_passe || ''}
+                            placeholder="Définir..."
+                            onBlur={e => {
+                              if (e.target.value !== (p.mot_de_passe || '')) {
+                                handleUpdateProfPassword(p.id_prof, e.target.value);
+                              }
+                            }}
+                            className="w-28 rounded border border-input bg-background px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-ring"
+                          />
+                          <button
+                            onClick={() => setShowPasswords(prev => ({ ...prev, [p.id_prof]: !prev[p.id_prof] }))}
+                            className="p-1 text-muted-foreground hover:text-foreground"
+                          >
+                            {showPasswords[p.id_prof] ? <EyeOff className="h-3 w-3" /> : <Eye className="h-3 w-3" />}
+                          </button>
+                        </div>
+                      </td>
                       <td className="px-4 py-3 text-right">
                         <button onClick={() => handleDeleteProf(p.id_prof)} className="rounded-lg p-1.5 text-destructive hover:bg-destructive/10 transition">
                           <Trash2 className="h-4 w-4" />
@@ -840,6 +995,82 @@ const AdminDashboard = ({ onLogout }: AdminDashboardProps) => {
                   })}
                 </tbody>
               </table>
+            </div>
+          </div>
+        )}
+
+        {/* ===== ONGLET DISPONIBILITÉS ===== */}
+        {activeTab === 'disponibilites' && (
+          <div className="space-y-6">
+            <div className="flex items-center justify-between">
+              <h2 className="font-heading text-xl font-bold text-foreground">Disponibilités des professeurs</h2>
+              <select
+                value={dispoFilterJour}
+                onChange={e => setDispoFilterJour(e.target.value)}
+                className="rounded-lg border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+              >
+                {JOURS.map(j => <option key={j} value={j}>{j}</option>)}
+              </select>
+            </div>
+
+            <div className="rounded-xl border border-border bg-card overflow-hidden">
+              <table className="w-full text-sm">
+                <thead className="bg-muted/50">
+                  <tr>
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground">Créneau</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground">Professeurs disponibles</th>
+                    <th className="px-4 py-3 text-center text-xs font-semibold text-muted-foreground">Compteur</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border">
+                  {CRENEAUX.map(cr => {
+                    const slotProfs = getProfsForSlot(dispoFilterJour, cr.debut);
+                    const availableCount = slotProfs.filter(sp => sp.status === 'available').length;
+                    return (
+                      <tr key={cr.debut} className="hover:bg-muted/30">
+                        <td className="px-4 py-3 font-mono text-xs font-semibold text-foreground whitespace-nowrap">{cr.label}</td>
+                        <td className="px-4 py-3">
+                          <div className="flex flex-wrap gap-1">
+                            {slotProfs.map(sp => (
+                              <span
+                                key={sp.prof.id_prof}
+                                className={cn(
+                                  'rounded-full px-2 py-0.5 text-xs font-semibold',
+                                  sp.status === 'available' ? 'bg-green-500/20 text-green-700' :
+                                  sp.status === 'unavailable' ? 'bg-destructive/10 text-destructive' :
+                                  sp.status === 'busy' ? 'bg-destructive/20 text-destructive line-through' :
+                                  'bg-yellow-500/20 text-yellow-700'
+                                )}
+                              >
+                                {sp.status === 'available' && '✅ '}
+                                {sp.status === 'unavailable' && '❌ '}
+                                {sp.status === 'busy' && '🚫 '}
+                                {sp.status === 'unknown' && '⚠️ '}
+                                {sp.prof.prenom} {sp.prof.nom}
+                              </span>
+                            ))}
+                          </div>
+                        </td>
+                        <td className="px-4 py-3 text-center">
+                          <span className={cn(
+                            'rounded-full px-3 py-1 text-xs font-bold',
+                            availableCount > 0 ? 'bg-green-500/20 text-green-700' : 'bg-muted text-muted-foreground'
+                          )}>
+                            {availableCount} dispo{availableCount !== 1 ? 's' : ''}
+                          </span>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+
+            <div className="flex items-center gap-4 text-xs text-muted-foreground rounded-lg bg-muted/50 p-3">
+              <span>✅ Disponible</span>
+              <span>❌ Non disponible</span>
+              <span>🚫 Déjà occupé</span>
+              <span>⚠️ Non renseigné</span>
             </div>
           </div>
         )}
