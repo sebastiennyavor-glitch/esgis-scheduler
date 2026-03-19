@@ -53,6 +53,7 @@ const ScheduleGrid = ({ seances, showPole = false, showRole = false, profId, onD
                   showPole={showPole}
                   showRole={showRole}
                   profId={profId}
+                  onDelete={onDeleteSeance ? () => onDeleteSeance(seance.id_seance) : undefined}
                 />
               ))}
             </div>

@@ -139,7 +139,7 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
   return (
     <DataContext.Provider value={{ 
       cours, professeurs, salles, delegues, emploiTemps, seances, configPlanning, loading, error, 
-      refresh: fetchAll, refetch: fetchAll, addSeance, addCours, deleteCours, updateEmploiStatut, saveConfigPlanning
+      refresh: fetchAll, refetch: fetchAll, addSeance, deleteSeance, addCours, deleteCours, updateEmploiStatut, saveConfigPlanning
     }}>
       {children}
     </DataContext.Provider>

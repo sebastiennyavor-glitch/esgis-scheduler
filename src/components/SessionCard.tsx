@@ -41,6 +41,15 @@ const SessionCard = ({ seance, showPole = false, showRole = false, profId, onDel
       isCours ? 'session-cours' : 'session-examen'
     )}>
       <div className="flex items-start justify-between gap-2">
+        {onDelete && (
+          <button
+            onClick={(e) => { e.stopPropagation(); if (confirm('Supprimer cette séance du planning ?')) onDelete(); }}
+            className="mt-1 shrink-0 rounded-md p-1 text-destructive/60 transition hover:bg-destructive/10 hover:text-destructive"
+            title="Supprimer cette séance"
+          >
+            <Trash2 className="h-4 w-4" />
+          </button>
+        )}
         <div className="flex-1 space-y-2">
           <div className="flex items-center gap-2 flex-wrap">
             {isCours ? (

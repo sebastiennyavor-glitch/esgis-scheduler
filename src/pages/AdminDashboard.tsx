@@ -482,7 +482,7 @@ const AdminDashboard = ({ onLogout }: AdminDashboardProps) => {
             )}
 
             <WeekNavigation currentWeek={currentWeek} onWeekChange={setCurrentWeek} />
-            <ScheduleGrid seances={weekSeances} />
+            <ScheduleGrid seances={weekSeances} onDeleteSeance={handleDeleteSeance} />
           </>
         )}
 
