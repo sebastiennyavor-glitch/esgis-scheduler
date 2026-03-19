@@ -15,6 +15,7 @@ export interface Professeur {
   email: string;
   telephone: string;
   specialite: string;
+  mot_de_passe: string | null;
 }
 
 export interface Salle {
@@ -68,6 +69,15 @@ export interface ConfigPlanning {
   date_semaine: string;
   nb_colonnes: number;
   nb_lignes: number;
+}
+
+export interface Disponibilite {
+  id?: number;
+  id_prof: number;
+  jour: string;
+  heure_debut: string;
+  heure_fin: string;
+  disponible: boolean;
 }
 
 export type UserRole = 'admin' | 'professeur' | 'delegue';

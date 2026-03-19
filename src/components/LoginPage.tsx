@@ -8,9 +8,8 @@ interface LoginPageProps {
   onLogin: (role: UserRole, id?: number) => void;
 }
 
-const PASSWORDS: Record<UserRole, string> = {
+const PASSWORDS: Record<'admin' | 'delegue', string> = {
   admin: 'admin@2026',
-  professeur: 'prof@2026',
   delegue: 'delegue@2026',
 };
 
@@ -24,17 +23,24 @@ const LoginPage = ({ onLogin }: LoginPageProps) => {
 
   const handleSubmit = () => {
     if (!selectedRole) return;
-    if (password !== PASSWORDS[selectedRole]) {
-      setError('Mot de passe incorrect');
-      return;
-    }
-    setError('');
-    if (selectedRole === 'admin') {
-      onLogin('admin');
-    } else if (selectedRole === 'professeur' && profId) {
+    
+    if (selectedRole === 'professeur') {
+      if (!profId) return;
+      const prof = professeurs.find(p => p.id_prof === parseInt(profId));
+      if (!prof) { setError('Professeur introuvable'); return; }
+      if (!prof.mot_de_passe) { setError('Aucun mot de passe défini. Contactez l\'administration.'); return; }
+      if (password !== prof.mot_de_passe) { setError('Mot de passe incorrect'); return; }
+      setError('');
       onLogin('professeur', parseInt(profId));
-    } else if (selectedRole === 'delegue' && delegueId) {
+    } else if (selectedRole === 'delegue') {
+      if (!delegueId) return;
+      if (password !== PASSWORDS.delegue) { setError('Mot de passe incorrect'); return; }
+      setError('');
       onLogin('delegue', parseInt(delegueId));
+    } else if (selectedRole === 'admin') {
+      if (password !== PASSWORDS.admin) { setError('Mot de passe incorrect'); return; }
+      setError('');
+      onLogin('admin');
     }
   };
 
@@ -46,7 +52,6 @@ const LoginPage = ({ onLogin }: LoginPageProps) => {
 
   return (
     <div className="flex min-h-screen flex-col items-center justify-center bg-background px-4">
-      {/* Header */}
       <div className="mb-10 text-center">
         <div className="mx-auto mb-4 flex h-20 w-20 items-center justify-center rounded-2xl gradient-esgis shadow-esgis">
           <GraduationCap className="h-10 w-10 text-primary-foreground" />
@@ -66,14 +71,13 @@ const LoginPage = ({ onLogin }: LoginPageProps) => {
         </div>
       </div>
 
-      {/* Role Selection */}
       <div className="w-full max-w-md space-y-3">
         {roles.map(role => {
           const Icon = role.icon;
           return (
             <button
               key={role.key}
-              onClick={() => setSelectedRole(role.key)}
+              onClick={() => { setSelectedRole(role.key); setError(''); setPassword(''); }}
               className={cn(
                 'flex w-full items-center gap-4 rounded-xl border-2 p-4 text-left transition-all duration-200',
                 selectedRole === role.key
@@ -96,7 +100,6 @@ const LoginPage = ({ onLogin }: LoginPageProps) => {
         })}
       </div>
 
-      {/* ID Input */}
       {selectedRole === 'professeur' && (
         <div className="mt-4 w-full max-w-md animate-fade-in">
           <label className="mb-1 block font-heading text-xs font-semibold text-foreground">Sélectionnez votre profil</label>
@@ -134,7 +137,6 @@ const LoginPage = ({ onLogin }: LoginPageProps) => {
         </div>
       )}
 
-      {/* Password */}
       {selectedRole && (
         <div className="mt-4 w-full max-w-md animate-fade-in">
           <label className="mb-1 block font-heading text-xs font-semibold text-foreground">Mot de passe</label>
@@ -142,14 +144,13 @@ const LoginPage = ({ onLogin }: LoginPageProps) => {
             type="password"
             value={password}
             onChange={e => { setPassword(e.target.value); setError(''); }}
-            placeholder="Entrez votre mot de passe"
+            placeholder={selectedRole === 'professeur' ? 'Votre mot de passe personnel' : 'Entrez votre mot de passe'}
             className="w-full rounded-lg border border-input bg-card px-4 py-3 text-sm text-card-foreground focus:outline-none focus:ring-2 focus:ring-ring"
           />
           {error && <p className="mt-1 text-xs font-semibold text-destructive">{error}</p>}
         </div>
       )}
 
-      {/* Submit */}
       {selectedRole && (
         <button
           onClick={handleSubmit}

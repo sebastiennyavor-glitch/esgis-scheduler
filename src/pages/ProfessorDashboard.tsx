@@ -2,16 +2,21 @@ import { useState } from 'react';
 import { useData } from '@/contexts/DataContext';
 import WeekNavigation from '@/components/WeekNavigation';
 import ScheduleGrid from '@/components/ScheduleGrid';
-import { LogOut, CalendarDays, User, Loader2 } from 'lucide-react';
+import ProfessorAvailability from '@/components/ProfessorAvailability';
+import { LogOut, CalendarDays, User, Loader2, Clock } from 'lucide-react';
+import { cn } from '@/lib/utils';
 
 interface ProfessorDashboardProps {
   profId: number;
   onLogout: () => void;
 }
 
+type ProfTab = 'planning' | 'disponibilites';
+
 const ProfessorDashboard = ({ profId, onLogout }: ProfessorDashboardProps) => {
   const { seances, professeurs, loading } = useData();
   const [currentWeek, setCurrentWeek] = useState<1 | 2 | 3 | 4>(1);
+  const [activeTab, setActiveTab] = useState<ProfTab>('planning');
   const prof = professeurs.find(p => p.id_prof === profId);
 
   const profSeances = seances.filter(
@@ -25,6 +30,11 @@ const ProfessorDashboard = ({ profId, onLogout }: ProfessorDashboardProps) => {
       </div>
     );
   }
+
+  const tabs: { key: ProfTab; label: string; icon: any }[] = [
+    { key: 'planning', label: 'Mon planning', icon: CalendarDays },
+    { key: 'disponibilites', label: 'Mes disponibilités', icon: Clock },
+  ];
 
   return (
     <div className="min-h-screen bg-background">
@@ -54,14 +64,43 @@ const ProfessorDashboard = ({ profId, onLogout }: ProfessorDashboardProps) => {
           </div>
         </div>
 
-        <div className="flex items-center gap-2 rounded-lg bg-esgis-gold-light p-3 text-sm">
-          <span className="font-heading text-xs font-bold text-secondary-foreground">
-            💡 Les badges <span className="text-esgis-cours">bleu</span> = cours · <span className="text-esgis-examen">orange</span> = examen/surveillance
-          </span>
+        {/* Tabs */}
+        <div className="flex gap-1 rounded-xl border border-border bg-card p-1">
+          {tabs.map(tab => {
+            const Icon = tab.icon;
+            return (
+              <button
+                key={tab.key}
+                onClick={() => setActiveTab(tab.key)}
+                className={cn(
+                  'flex flex-1 items-center justify-center gap-2 rounded-lg px-3 py-2 text-sm font-semibold transition',
+                  activeTab === tab.key
+                    ? 'gradient-esgis text-primary-foreground shadow'
+                    : 'text-muted-foreground hover:bg-muted'
+                )}
+              >
+                <Icon className="h-4 w-4" />
+                {tab.label}
+              </button>
+            );
+          })}
         </div>
 
-        <WeekNavigation currentWeek={currentWeek} onWeekChange={setCurrentWeek} />
-        <ScheduleGrid seances={profSeances} showPole showRole profId={profId} />
+        {activeTab === 'planning' && (
+          <>
+            <div className="flex items-center gap-2 rounded-lg bg-esgis-gold-light p-3 text-sm">
+              <span className="font-heading text-xs font-bold text-secondary-foreground">
+                💡 Les badges <span className="text-esgis-cours">bleu</span> = cours · <span className="text-esgis-examen">orange</span> = examen/surveillance
+              </span>
+            </div>
+            <WeekNavigation currentWeek={currentWeek} onWeekChange={setCurrentWeek} />
+            <ScheduleGrid seances={profSeances} showPole showRole profId={profId} />
+          </>
+        )}
+
+        {activeTab === 'disponibilites' && (
+          <ProfessorAvailability profId={profId} />
+        )}
       </main>
     </div>
   );

@@ -1,6 +1,6 @@
 import { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react';
 import { supabase } from '@/lib/supabase';
-import { Cours, Professeur, Salle, Delegue, EmploiTemps, Seance, SeanceProfesseur, ConfigPlanning } from '@/types';
+import { Cours, Professeur, Salle, Delegue, EmploiTemps, Seance, SeanceProfesseur, ConfigPlanning, Disponibilite } from '@/types';
 
 interface DataContextType {
   cours: Cours[];
@@ -10,6 +10,7 @@ interface DataContextType {
   emploiTemps: EmploiTemps[];
   seances: Seance[];
   configPlanning: ConfigPlanning | null;
+  disponibilites: Disponibilite[];
   loading: boolean;
   error: string | null;
   refresh: () => Promise<void>;
@@ -20,6 +21,7 @@ interface DataContextType {
   deleteCours: (id: number) => Promise<void>;
   updateEmploiStatut: (id: number, statut: 'brouillon' | 'publié') => Promise<void>;
   saveConfigPlanning: (config: ConfigPlanning) => Promise<void>;
+  saveDisponibilites: (profId: number, dispos: Omit<Disponibilite, 'id'>[]) => Promise<void>;
 }
 
 const DataContext = createContext<DataContextType | null>(null);
@@ -38,6 +40,7 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
   const [emploiTemps, setEmploiTemps] = useState<EmploiTemps[]>([]);
   const [seances, setSeances] = useState<Seance[]>([]);
   const [configPlanning, setConfigPlanning] = useState<ConfigPlanning | null>(null);
+  const [disponibilites, setDisponibilites] = useState<Disponibilite[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -45,7 +48,7 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
     setLoading(true);
     setError(null);
     try {
-      const [coursRes, profsRes, sallesRes, deleguesRes, emploiRes, seancesRes, spRes, configRes] = await Promise.all([
+      const [coursRes, profsRes, sallesRes, deleguesRes, emploiRes, seancesRes, spRes, configRes, dispoRes] = await Promise.all([
         supabase.from('cours').select('*'),
         supabase.from('professeurs').select('*'),
         supabase.from('salles').select('*'),
@@ -54,6 +57,7 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
         supabase.from('seances').select('*'),
         supabase.from('seance_professeurs').select('*'),
         supabase.from('config_planning').select('*').limit(1).maybeSingle(),
+        supabase.from('disponibilites').select('*'),
       ]);
 
       const results = [coursRes, profsRes, sallesRes, deleguesRes, emploiRes, seancesRes, spRes];
@@ -68,6 +72,7 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
       setDelegues(deleguesRes.data || []);
       setEmploiTemps(emploiRes.data || []);
       setConfigPlanning(configRes.data || null);
+      setDisponibilites(dispoRes.data || []);
 
       const spData = (spRes.data || []) as { id_seance: number; id_prof: number; role: string }[];
       const enrichedSeances: Seance[] = (seancesRes.data || []).map((s: any) => ({
@@ -143,10 +148,20 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
     await fetchAll();
   };
 
+  const saveDisponibilites = async (profId: number, dispos: Omit<Disponibilite, 'id'>[]) => {
+    // Delete existing dispos for this prof then insert new ones
+    await supabase.from('disponibilites').delete().eq('id_prof', profId);
+    if (dispos.length > 0) {
+      const { error } = await supabase.from('disponibilites').insert(dispos);
+      if (error) throw new Error(error.message);
+    }
+    await fetchAll();
+  };
+
   return (
     <DataContext.Provider value={{ 
-      cours, professeurs, salles, delegues, emploiTemps, seances, configPlanning, loading, error, 
-      refresh: fetchAll, refetch: fetchAll, addSeance, deleteSeance, addCours, deleteCours, updateEmploiStatut, saveConfigPlanning
+      cours, professeurs, salles, delegues, emploiTemps, seances, configPlanning, disponibilites, loading, error, 
+      refresh: fetchAll, refetch: fetchAll, addSeance, deleteSeance, addCours, deleteCours, updateEmploiStatut, saveConfigPlanning, saveDisponibilites
     }}>
       {children}
     </DataContext.Provider>
