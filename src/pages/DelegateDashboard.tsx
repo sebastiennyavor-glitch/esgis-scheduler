@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useData } from '@/contexts/DataContext';
 import WeekNavigation from '@/components/WeekNavigation';
 import ScheduleGrid from '@/components/ScheduleGrid';
-import { LogOut, CalendarDays, Printer, MapPin, Loader2 } from 'lucide-react';
+import { LogOut, CalendarDays, Printer, MapPin, Loader2, Share2 } from 'lucide-react';
 
 interface DelegateDashboardProps {
   delegueId: number;
