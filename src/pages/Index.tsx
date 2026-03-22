@@ -27,12 +27,11 @@ const Index = () => {
 
   // Force password change for profs and delegates using default passwords
   if (auth.needsPasswordChange && (auth.role === 'professeur' || auth.role === 'delegue')) {
-    const userName = auth.role === 'professeur' ? 'Professeur' : 'Délégué';
     return (
       <ChangePasswordForm
         userType={auth.role}
         userId={auth.id!}
-        userName={userName}
+        userName=""
         onPasswordChanged={handlePasswordChanged}
       />
     );
