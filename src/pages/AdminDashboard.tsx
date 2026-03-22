@@ -23,6 +23,9 @@ const CRENEAUX = [
   { label: '19h - 21h30', debut: '19:00', fin: '21:30' },
 ];
 
+// Normalize TIME from DB ('08:00:00') to match our format ('08:00')
+const normalizeTime = (t: string) => t?.substring(0, 5) || t;
+
 const AdminDashboard = ({ onLogout }: AdminDashboardProps) => {
   const { seances, emploiTemps, salles, cours, professeurs, delegues, configPlanning, disponibilites, loading, error, addSeance, deleteSeance, updateEmploiStatut, refetch, saveConfigPlanning } = useData();
   const [currentWeek, setCurrentWeek] = useState<1 | 2 | 3 | 4>(1);
@@ -113,7 +116,7 @@ const AdminDashboard = ({ onLogout }: AdminDashboardProps) => {
 
     if (!jour) return 'unknown';
     const dispo = disponibilites.find(
-      dd => dd.id_prof === profId && dd.jour === jour && dd.heure_debut === heureDebut
+      dd => dd.id_prof === profId && dd.jour === jour && normalizeTime(dd.heure_debut) === normalizeTime(heureDebut)
     );
     if (!dispo) return 'unknown';
     return dispo.disponible ? 'available' : 'unavailable';
@@ -417,7 +420,7 @@ const AdminDashboard = ({ onLogout }: AdminDashboardProps) => {
   const getProfsForSlot = (jour: string, heureDebut: string) => {
     return professeurs.map(p => {
       const dispo = disponibilites.find(
-        d => d.id_prof === p.id_prof && d.jour === jour && d.heure_debut === heureDebut
+        d => d.id_prof === p.id_prof && d.jour === jour && normalizeTime(d.heure_debut) === normalizeTime(heureDebut)
       );
       // Check if prof is busy (has session at this time on any date matching this jour)
       const isBusy = seances.some(s => {

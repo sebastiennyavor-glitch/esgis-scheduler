@@ -29,7 +29,9 @@ const ProfessorAvailability = ({ profId }: Props) => {
     const profDispos = disponibilites.filter(d => d.id_prof === profId);
     const newGrid: Record<string, boolean> = {};
     for (const d of profDispos) {
-      newGrid[key(d.jour, d.heure_debut)] = d.disponible;
+      // Normalize time from DB format '08:00:00' to '08:00'
+      const normalizedDebut = d.heure_debut?.substring(0, 5) || d.heure_debut;
+      newGrid[key(d.jour, normalizedDebut)] = d.disponible;
     }
     setGrid(newGrid);
   }, [disponibilites, profId]);
