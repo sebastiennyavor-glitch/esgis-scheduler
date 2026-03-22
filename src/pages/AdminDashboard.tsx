@@ -116,7 +116,7 @@ const AdminDashboard = ({ onLogout }: AdminDashboardProps) => {
 
     if (!jour) return 'unknown';
     const dispo = disponibilites.find(
-      dd => dd.id_prof === profId && dd.jour === jour && dd.heure_debut === heureDebut
+      dd => dd.id_prof === profId && dd.jour === jour && normalizeTime(dd.heure_debut) === normalizeTime(heureDebut)
     );
     if (!dispo) return 'unknown';
     return dispo.disponible ? 'available' : 'unavailable';
