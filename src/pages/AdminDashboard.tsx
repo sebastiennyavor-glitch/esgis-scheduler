@@ -23,6 +23,9 @@ const CRENEAUX = [
   { label: '19h - 21h30', debut: '19:00', fin: '21:30' },
 ];
 
+// Normalize TIME from DB ('08:00:00') to match our format ('08:00')
+const normalizeTime = (t: string) => t?.substring(0, 5) || t;
+
 const AdminDashboard = ({ onLogout }: AdminDashboardProps) => {
   const { seances, emploiTemps, salles, cours, professeurs, delegues, configPlanning, disponibilites, loading, error, addSeance, deleteSeance, updateEmploiStatut, refetch, saveConfigPlanning } = useData();
   const [currentWeek, setCurrentWeek] = useState<1 | 2 | 3 | 4>(1);
