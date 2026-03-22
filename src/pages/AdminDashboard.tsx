@@ -181,7 +181,19 @@ const AdminDashboard = ({ onLogout }: AdminDashboardProps) => {
       toast.error('Veuillez remplir tous les champs obligatoires.');
       return;
     }
-    // Check for conflicts
+    // Check room conflict
+    const roomConflict = getRoomConflict(parseInt(formData.id_salle), formData.date, formData.heure_debut, formData.heure_fin);
+    if (roomConflict) {
+      toast.error(roomConflict);
+      return;
+    }
+    // Check course duplicate
+    const courseConflict = getCourseDuplicateConflict(parseInt(formData.id_cours), formData.date, formData.heure_debut, formData.heure_fin);
+    if (courseConflict) {
+      toast.error(courseConflict);
+      return;
+    }
+    // Check for prof conflicts
     for (const pid of formData.profIds) {
       const msg = getConflictMessage(pid, formData.date, formData.heure_debut, formData.heure_fin);
       if (msg) {
