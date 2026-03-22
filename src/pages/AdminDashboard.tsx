@@ -339,6 +339,7 @@ const AdminDashboard = ({ onLogout }: AdminDashboardProps) => {
         ...delegueForm,
         id_salle: delegueForm.id_salle ? parseInt(delegueForm.id_salle) : null,
         niveau: delegueForm.niveau || null,
+        mot_de_passe: 'delegue@2026',
       };
       const { error } = await supabase.from('delegues').insert([dataToInsert]);
       if (error) throw error;
