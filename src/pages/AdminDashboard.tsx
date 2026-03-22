@@ -308,7 +308,7 @@ const AdminDashboard = ({ onLogout }: AdminDashboardProps) => {
     try {
       const dataToInsert = {
         ...profForm,
-        mot_de_passe: profForm.mot_de_passe || null,
+        mot_de_passe: profForm.mot_de_passe || 'prof@2026',
       };
       const { error } = await supabase.from('professeurs').insert([dataToInsert]);
       if (error) throw error;
