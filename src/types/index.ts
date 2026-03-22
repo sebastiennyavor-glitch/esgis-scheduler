@@ -33,6 +33,7 @@ export interface Delegue {
   telephone: string;
   id_salle: number;
   niveau: string | null;
+  mot_de_passe: string | null;
 }
 
 export interface EmploiTemps {

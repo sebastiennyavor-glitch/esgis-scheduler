@@ -98,7 +98,6 @@ const AdminDashboard = ({ onLogout }: AdminDashboardProps) => {
 
   // Helper: get prof availability status for a given day/time
   const getProfAvailabilityStatus = (profId: number, date: string, heureDebut: string, heureFin: string): 'available' | 'unavailable' | 'unknown' | 'conflict' => {
-    // Check for conflicts first (prof already assigned to another session at same time)
     const d = new Date(date);
     const jourIndex = d.getDay();
     const jourMap: Record<number, string> = { 1: 'Lundi', 2: 'Mardi', 3: 'Mercredi', 4: 'Jeudi', 5: 'Vendredi', 6: 'Samedi' };
@@ -108,12 +107,10 @@ const AdminDashboard = ({ onLogout }: AdminDashboardProps) => {
     const conflicting = seances.find(s => {
       if (s.date !== date) return false;
       if (!s.professeurs.some(sp => sp.id_prof === profId)) return false;
-      // Check time overlap
       return s.heure_debut < heureFin && s.heure_fin > heureDebut;
     });
     if (conflicting) return 'conflict';
 
-    // Check availability
     if (!jour) return 'unknown';
     const dispo = disponibilites.find(
       dd => dd.id_prof === profId && dd.jour === jour && dd.heure_debut === heureDebut
@@ -132,6 +129,30 @@ const AdminDashboard = ({ onLogout }: AdminDashboardProps) => {
     const prof = professeurs.find(p => p.id_prof === profId);
     const c = cours.find(co => co.id_cours === conflicting.id_cours);
     return `⚠️ Conflit : Prof ${prof?.prenom} ${prof?.nom} est déjà assigné à ${c?.nom_cours} sur ce créneau`;
+  };
+
+  // Check room conflict
+  const getRoomConflict = (salleId: number, date: string, heureDebut: string, heureFin: string): string | null => {
+    const conflicting = seances.find(s => {
+      if (s.id_salle !== salleId || s.date !== date) return false;
+      return s.heure_debut < heureFin && s.heure_fin > heureDebut;
+    });
+    if (!conflicting) return null;
+    const salle = salles.find(s => s.id_salle === salleId);
+    const c = cours.find(co => co.id_cours === conflicting.id_cours);
+    return `⚠️ Conflit salle : ${salle?.nom_salle} est déjà occupée par "${c?.nom_cours}" (${conflicting.heure_debut}-${conflicting.heure_fin})`;
+  };
+
+  // Check duplicate course at same time
+  const getCourseDuplicateConflict = (coursId: number, date: string, heureDebut: string, heureFin: string): string | null => {
+    const conflicting = seances.find(s => {
+      if (s.id_cours !== coursId || s.date !== date) return false;
+      return s.heure_debut < heureFin && s.heure_fin > heureDebut;
+    });
+    if (!conflicting) return null;
+    const c = cours.find(co => co.id_cours === coursId);
+    const salle = salles.find(s => s.id_salle === conflicting.id_salle);
+    return `⚠️ Doublon : "${c?.nom_cours}" est déjà programmé sur ce créneau en ${salle?.nom_salle}`;
   };
 
   const handleDeleteSeance = async (id: number) => {
@@ -160,7 +181,19 @@ const AdminDashboard = ({ onLogout }: AdminDashboardProps) => {
       toast.error('Veuillez remplir tous les champs obligatoires.');
       return;
     }
-    // Check for conflicts
+    // Check room conflict
+    const roomConflict = getRoomConflict(parseInt(formData.id_salle), formData.date, formData.heure_debut, formData.heure_fin);
+    if (roomConflict) {
+      toast.error(roomConflict);
+      return;
+    }
+    // Check course duplicate
+    const courseConflict = getCourseDuplicateConflict(parseInt(formData.id_cours), formData.date, formData.heure_debut, formData.heure_fin);
+    if (courseConflict) {
+      toast.error(courseConflict);
+      return;
+    }
+    // Check for prof conflicts
     for (const pid of formData.profIds) {
       const msg = getConflictMessage(pid, formData.date, formData.heure_debut, formData.heure_fin);
       if (msg) {
@@ -275,7 +308,7 @@ const AdminDashboard = ({ onLogout }: AdminDashboardProps) => {
     try {
       const dataToInsert = {
         ...profForm,
-        mot_de_passe: profForm.mot_de_passe || null,
+        mot_de_passe: profForm.mot_de_passe || 'prof@2026',
       };
       const { error } = await supabase.from('professeurs').insert([dataToInsert]);
       if (error) throw error;
@@ -306,6 +339,7 @@ const AdminDashboard = ({ onLogout }: AdminDashboardProps) => {
         ...delegueForm,
         id_salle: delegueForm.id_salle ? parseInt(delegueForm.id_salle) : null,
         niveau: delegueForm.niveau || null,
+        mot_de_passe: 'delegue@2026',
       };
       const { error } = await supabase.from('delegues').insert([dataToInsert]);
       if (error) throw error;
