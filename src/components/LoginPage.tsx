@@ -5,13 +5,12 @@ import { Shield, GraduationCap, Users, ArrowRight } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface LoginPageProps {
-  onLogin: (role: UserRole, id?: number) => void;
+  onLogin: (role: UserRole, id?: number, needsPasswordChange?: boolean) => void;
 }
 
-const PASSWORDS: Record<'admin' | 'delegue', string> = {
-  admin: 'admin@2026',
-  delegue: 'delegue@2026',
-};
+const ADMIN_PASSWORD = 'admin@2026';
+const DEFAULT_PROF_PASSWORD = 'prof@2026';
+const DEFAULT_DELEGUE_PASSWORD = 'delegue@2026';
 
 const LoginPage = ({ onLogin }: LoginPageProps) => {
   const { professeurs, delegues, salles } = useData();
@@ -28,17 +27,22 @@ const LoginPage = ({ onLogin }: LoginPageProps) => {
       if (!profId) return;
       const prof = professeurs.find(p => p.id_prof === parseInt(profId));
       if (!prof) { setError('Professeur introuvable'); return; }
-      if (!prof.mot_de_passe) { setError('Aucun mot de passe défini. Contactez l\'administration.'); return; }
-      if (password !== prof.mot_de_passe) { setError('Mot de passe incorrect'); return; }
+      const currentPassword = prof.mot_de_passe || DEFAULT_PROF_PASSWORD;
+      if (password !== currentPassword) { setError('Mot de passe incorrect'); return; }
+      const needsChange = !prof.mot_de_passe || prof.mot_de_passe === DEFAULT_PROF_PASSWORD;
       setError('');
-      onLogin('professeur', parseInt(profId));
+      onLogin('professeur', parseInt(profId), needsChange);
     } else if (selectedRole === 'delegue') {
       if (!delegueId) return;
-      if (password !== PASSWORDS.delegue) { setError('Mot de passe incorrect'); return; }
+      const delegue = delegues.find(d => d.id_delegue === parseInt(delegueId));
+      if (!delegue) { setError('Délégué introuvable'); return; }
+      const currentPassword = delegue.mot_de_passe || DEFAULT_DELEGUE_PASSWORD;
+      if (password !== currentPassword) { setError('Mot de passe incorrect'); return; }
+      const needsChange = !delegue.mot_de_passe || delegue.mot_de_passe === DEFAULT_DELEGUE_PASSWORD;
       setError('');
-      onLogin('delegue', parseInt(delegueId));
+      onLogin('delegue', parseInt(delegueId), needsChange);
     } else if (selectedRole === 'admin') {
-      if (password !== PASSWORDS.admin) { setError('Mot de passe incorrect'); return; }
+      if (password !== ADMIN_PASSWORD) { setError('Mot de passe incorrect'); return; }
       setError('');
       onLogin('admin');
     }
@@ -144,7 +148,7 @@ const LoginPage = ({ onLogin }: LoginPageProps) => {
             type="password"
             value={password}
             onChange={e => { setPassword(e.target.value); setError(''); }}
-            placeholder={selectedRole === 'professeur' ? 'Votre mot de passe personnel' : 'Entrez votre mot de passe'}
+            placeholder={selectedRole === 'professeur' ? 'Votre mot de passe (défaut: prof@2026)' : selectedRole === 'delegue' ? 'Votre mot de passe (défaut: delegue@2026)' : 'Mot de passe administrateur'}
             className="w-full rounded-lg border border-input bg-card px-4 py-3 text-sm text-card-foreground focus:outline-none focus:ring-2 focus:ring-ring"
           />
           {error && <p className="mt-1 text-xs font-semibold text-destructive">{error}</p>}
