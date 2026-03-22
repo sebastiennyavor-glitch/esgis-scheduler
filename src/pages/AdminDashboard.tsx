@@ -420,7 +420,7 @@ const AdminDashboard = ({ onLogout }: AdminDashboardProps) => {
   const getProfsForSlot = (jour: string, heureDebut: string) => {
     return professeurs.map(p => {
       const dispo = disponibilites.find(
-        d => d.id_prof === p.id_prof && d.jour === jour && d.heure_debut === heureDebut
+        d => d.id_prof === p.id_prof && d.jour === jour && normalizeTime(d.heure_debut) === normalizeTime(heureDebut)
       );
       // Check if prof is busy (has session at this time on any date matching this jour)
       const isBusy = seances.some(s => {
